@@ -9,7 +9,7 @@ Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (re
 Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
 Phase 5 (integration + docs): [x] P5-T1 [x] P5-T2 [x] P5-T3
-Phase 6 (follow-ups): [ ] P6-T1
+Phase 6 (follow-ups): [x] P6-T1
 
 23 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
@@ -909,7 +909,7 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 ### Phase 6 — Follow-ups requested by the user
 
-#### - [ ] P6-T1 Keep archives in their folder
+#### - [x] P6-T1 Keep archives in their folder
 - Why: the user asked that archives stay in the folder they are in, because many belong with that folder (SPEC amendment 2).
 - Owns: `tidyup/rules.py`, `tidyup/plan.py`, `tidyup/default_config.yaml`, `config.yaml` (byte-identical copy), `tidyup/config.py` (only if validation of the new key needs it), the tests that touch archives (`tests/test_rules.py`, `tests/test_plan.py`, `tests/test_upkeep.py`, `tests/test_e2e.py`, `tests/test_config.py`, `tests/test_report.py` as needed; `tests/fixtures/fake_tree.py` may gain fixture files), `README.md`, `CLAUDE.md`. Reads: SPEC, PLAN, `tidyup/dupes.py`, `tidyup/upkeep.py`, `tidyup/report.py`, `tidyup/models.py`.
 - Behaviour with `keep_in_place: true` (default):

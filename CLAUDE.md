@@ -35,7 +35,7 @@ Work files (`inventory.csv`, `manifest.csv`, `report.html`, `logs/undo_<timestam
 
 - `Documents/{Finance, Receipts, School, Work, Personal, Medical, Manuals, Housing, Taxes, Other}`
 - `Pictures/Photos/YYYY/YYYY-MM`, `Pictures/Screenshots_Review`, `Videos/YYYY`
-- `Installers`, `Archives` (inside Downloads); `_Unsorted` (with subfolders like `PDFs`, `Documents`), `_Duplicates`, `_Review_Delete` (in the user profile folder)
+- `Installers` (inside Downloads; `Archives` only with `rules.archives.keep_in_place: false`); `_Unsorted` (with subfolders like `PDFs`, `Documents`), `_Duplicates`, `_Review_Delete` (in the user profile folder)
 - In place by default. Files already in OneDrive stay in OneDrive (mirrored structure). A destination root (e.g. `D:\Organized`) is optional.
 
 ## Naming conventions
@@ -57,7 +57,8 @@ High confidence defaults to approved Y. Medium and low default to N.
 | video | `Videos/YYYY` | high for filename date, else medium |
 | pdf | first 2 pages of text, keyword category, date from text. Renamed only at high confidence, else `_Unsorted/PDFs` with the original name | high with enough keyword hits; scanned/no text is medium (filename/keywords only); no match is low |
 | document | docx via python-docx, other formats by filename only. Moved, never renamed | docx strong text match high, filename match medium, none low (`_Unsorted/Documents`) |
-| installer / archive | in Downloads goes to `Installers/` or `Archives/` | high |
+| installer | in Downloads goes to `Installers/` | high |
+| archive | left in its folder (skip); `keep_in_place: false` → Downloads/Archives | high |
 | installer_old | installers older than 90 days become `review_delete` | low, approved N |
 | exact_duplicate | group by size, then SHA-256; keeper by best location, name and oldest created date; others go to `_Duplicates` with a note naming the kept copy | high (approved Y) |
 | atomic_folder | whole folder, left in place (or moved whole with a destination root) | medium, approved N when moved |

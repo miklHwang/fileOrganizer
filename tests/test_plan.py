@@ -72,6 +72,36 @@ def test_duplicates(cfg, fake_tree, mock_attrs):
         assert kr.action != Action.DUPLICATE
 
 
+def test_archive_duplicates_moved_when_not_kept(cfg, fake_tree, mock_attrs):
+    cfg.rules["archives"]["keep_in_place"] = False
+    src = fake_tree.files["archive_zip"]
+    (fake_tree.folders["documents"] / "copy_a.zip").write_bytes(src.read_bytes())
+    _, res = _plan(cfg)
+    dups = [r for r in res.rows if r.action == Action.DUPLICATE and r.source.suffix == ".zip"]
+    assert dups and all("_Duplicates" in str(r.destination) for r in dups)
+
+
+def test_archive_duplicate_kept_in_folder(cfg, fake_tree, mock_attrs):
+    src = fake_tree.files["archive_zip"]
+    for d in ("documents", "downloads"):
+        (fake_tree.folders[d] / "copy_a.zip").write_bytes(src.read_bytes())
+    _, res = _plan(cfg)
+    arcs = [r for r in res.rows if r.source.suffix == ".zip"]
+    assert len(arcs) >= 3
+    for r in arcs:
+        assert r.action == Action.SKIP and r.rule == "archive" and not r.approved and r.destination is None
+        assert "archive: kept in its folder" in r.notes
+    by = _by_src(res)
+    keeper_row = [r for r in arcs if "same content as" not in r.notes]
+    assert keeper_row
+    nonkeepers = [r for r in arcs if "same content as" in r.notes]
+    assert nonkeepers
+    for r in nonkeepers:
+        keeper = r.notes.split("same content as ")[1].strip()
+        assert winutil.norm_key(keeper) in by
+        assert r.notes == f"archive: kept in its folder; same content as {keeper}"
+
+
 def test_version_chain_older_not_approved(cfg, fake_tree, mock_attrs):
     _, res = _plan(cfg)
     olds = [r for r in res.rows if "likely old version of" in r.notes]
@@ -185,3 +215,43 @@ def test_command_prints_onedrive_block(cfg, mock_attrs, tmp_path, capsys):
     plan.command(c, argparse.Namespace(dry_run=True))
     out = capsys.readouterr()
     assert "OUT of OneDrive" in out.out + out.err
+
+
+def test_archive_with_dest_root_skips(cfg, fake_tree, mock_attrs, tmp_path):
+    c = dataclasses.replace(cfg, dest_root=tmp_path / "Organized")
+    _, res = _plan(c)
+    for h in ("archive_zip", "archive_7z"):
+        r = _row(res, fake_tree, h)
+        assert r.action == Action.SKIP and r.rule == "archive" and r.destination is None
+
+
+def test_cloud_only_archive_never_opened(cfg, fake_tree, request, open_spy):
+    f = fake_tree.folders["onedrive"] / "cloud.zip"
+    f.write_bytes(b"PK-cloud")
+    fake_tree.cloud_only.append(f)
+    request.getfixturevalue("mock_attrs")
+    open_spy.clear()  # ignore the test's own write above
+    _, res = _plan(cfg)
+    r = _by_src(res)[winutil.norm_key(f)]
+    assert r.action == Action.SKIP and r.rule == "archive" and "cloud-only" in r.notes
+    assert winutil.norm_key(f) not in open_spy
+
+
+def test_onedrive_archive_skips(cfg, fake_tree, mock_attrs):
+    f = fake_tree.folders["onedrive"] / "local.zip"
+    f.write_bytes(b"PK-local")
+    _, res = _plan(cfg)
+    r = _by_src(res)[winutil.norm_key(f)]
+    assert r.action == Action.SKIP and r.rule == "archive" and r.destination is None
+
+
+def test_archive_keeper_of_non_archive_duplicate(cfg, fake_tree, mock_attrs):
+    data = fake_tree.files["archive_zip"].read_bytes()
+    dup = fake_tree.folders["downloads"] / "photos_backup_copy.dat"
+    dup.write_bytes(data)
+    _, res = _plan(cfg)
+    by = _by_src(res)
+    arc = by[winutil.norm_key(fake_tree.files["archive_zip"])]
+    d = by[winutil.norm_key(dup)]
+    assert arc.action == Action.SKIP and arc.rule == "archive"
+    assert d.action == Action.DUPLICATE and "photos_backup.zip" in d.notes

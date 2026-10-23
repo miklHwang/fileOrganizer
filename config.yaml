@@ -90,7 +90,7 @@ structure:
   screenshots: Pictures/Screenshots_Review        # Screenshots to look over
   videos: "Videos/{yyyy}"                         # Videos by year
   installers: Installers                          # .exe and .msi files from Downloads
-  archives: Archives                              # .zip, .7z and .rar files from Downloads
+  archives: Archives                              # Used only when rules > archives > keep_in_place is false
   unsorted: _Unsorted                             # Anything that matches no rule (PDFs go to _Unsorted/PDFs)
   duplicates: _Duplicates                         # Extra copies of identical files
   review_delete: _Review_Delete                   # Files you may want to delete
@@ -155,8 +155,9 @@ rules:
     only_in: [downloads]          # Only sort installers found in these folders
     review_delete_after_days: 90  # Installers older than this are suggested for review (never auto-approved)
   archives:
-    extensions: [.zip, .7z, .rar] # Archive file types
-    only_in: [downloads]          # Only sort archives found in these folders
+    keep_in_place: true           # Leave archive files (.zip, .7z, ...) in the folder they are in. Set to false to collect archives from Downloads into Downloads\Archives.
+    extensions: [.zip, .7z, .rar, .tar, .gz, .tgz, .bz2, .xz, .iso]   # Archive file types
+    only_in: [downloads]          # Only used when keep_in_place is false: collect archives found in these folders
   pdf:
     max_pages: 2                  # How many pages at the start of a PDF are read
     high_min_hits: 2              # Keyword matches needed for a confident (high) result

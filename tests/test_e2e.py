@@ -214,3 +214,18 @@ def test_cli_walkthrough(fake_tree, mock_attrs, tmp_path, capsys):
     assert runs and [o for o in runs[-1].ops if o["type"] == "move"]
     assert cli.main(base + ["undo"]) == 0
     assert snapshot(home) == before
+
+
+def test_archives_untouched_after_full_apply(cfg, fake_tree, mock_attrs):
+    z = fake_tree.files["archive_zip"].read_bytes()
+    extra = [fake_tree.folders["documents"] / "dup1.zip", fake_tree.folders["desktop"] / "dup2.zip"]
+    for p in extra:
+        p.write_bytes(z)
+    arcs = {p: p.read_bytes() for p in (fake_tree.files["archive_zip"], fake_tree.files["archive_7z"], *extra)}
+    _records, rows = _plan(cfg, approve_all=True)
+    keys = {winutil.norm_key(p) for p in arcs}
+    assert not [r for r in rows if winutil.norm_key(r.source) in keys and r.action != Action.SKIP]
+    res = apply.apply_rows(cfg, apply.select_rows(rows, cfg))
+    assert res.errors == 0
+    for p, data in arcs.items():
+        assert p.read_bytes() == data

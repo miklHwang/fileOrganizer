@@ -156,7 +156,7 @@ tidyup lists what it is about to do and asks you to confirm. Type `y` to continu
 
 ### Step 5 - check the results
 
-Look in your Downloads folder in File Explorer: files should be in `Installers`, `Archives`, `Pictures\...` and so on. Check that names, dates and contents look right. To see what was done: `python -m tidyup undo --list`.
+Look in your Downloads folder in File Explorer: files should be in `Installers`, `Pictures\...` and so on. Archives (`.zip`, `.7z`, ...) stay exactly where they were. Check that names, dates and contents look right. To see what was done: `python -m tidyup undo --list`.
 
 ### Step 6 - test undo
 
@@ -215,6 +215,7 @@ What it does:
 
 - Looks only at the folders in `upkeep: sources:` (default Downloads, Desktop, Screenshots).
 - Only does `move`, `rename` and `move_rename` actions, and only those tidyup is **highly confident** about (e.g. an installer to `Installers`, a clear screenshot to `Screenshots_Review`, a dated photo to its month folder).
+- Leaves archives (`.zip`, `.7z`, ...) alone; they are never moved.
 - Shows you what it will do and **asks once** before moving anything. Add `--yes` to skip the question.
 - **Never** deletes, never sends to review/delete, never touches anything uncertain; those stay for a full `scan` / `plan` / review round.
 - Is logged like any other run, so `tidyup undo` reverses it.
@@ -286,25 +287,26 @@ Files tidyup keeps in `tidyup_data\` (next to `config.yaml`): `inventory.csv`, `
 
 Where the original request did not say, these are the choices made. Most can be changed in `config.yaml`.
 
-1. **In-place layout**: `Documents/<Category>` goes into your real Documents folder; `Pictures/...` and `Videos/...` into your real Pictures and Videos; `Installers` and `Archives` inside Downloads; `_Unsorted`, `_Duplicates` and `_Review_Delete` in your user folder (e.g. `C:\Users\me\_Unsorted`). Files already in OneDrive stay in OneDrive (same structure under the OneDrive folder).
+1. **In-place layout**: `Documents/<Category>` goes into your real Documents folder; `Pictures/...` and `Videos/...` into your real Pictures and Videos; `Installers` inside Downloads (`Archives` only if you set `rules: archives: keep_in_place: false`); `_Unsorted`, `_Duplicates` and `_Review_Delete` in your user folder (e.g. `C:\Users\me\_Unsorted`). Files already in OneDrive stay in OneDrive (same structure under the OneDrive folder).
 2. **Work files** (`inventory.csv`, `manifest.csv`, `report.html`, `logs\`) live in `tidyup_data\` next to `config.yaml` and are never scanned.
 3. **Atomic folders** are listed as one item and left in place when organizing in place; with a destination root they move whole (medium confidence, approved N). Your source folders themselves are never atomic. Extra markers: `.venv`, `pyvenv.cfg`.
-4. **Confidence**: photos with a camera date or a date in the file name: high; modified date only: medium. Videos with a date in the name: high; otherwise medium. Installers and archives in Downloads: high. Installers older than 90 days: suggested for `_Review_Delete`, low, never auto-approved. Exact duplicates: high (approved Y). Documents are moved, never renamed: Word files with a strong text match are high, a file-name match is medium. Screenshots: high at score 5 or more, medium at 3-4.
+4. **Confidence**: photos with a camera date or a date in the file name: high; modified date only: medium. Videos with a date in the name: high; otherwise medium. Installers in Downloads: high. Archives are left in their folder (a `skip` row). Installers older than 90 days: suggested for `_Review_Delete`, low, never auto-approved. Exact duplicates: high (approved Y). Documents are moved, never renamed: Word files with a strong text match are high, a file-name match is medium. Screenshots: high at score 5 or more, medium at 3-4.
 5. **Scanned PDFs** (no readable text) with a keyword in the file name go to `Documents/<Category>` with their original name (medium); otherwise to `_Unsorted/PDFs`. Text PDFs are renamed `YYYY-MM-DD_Category_Short-Description.pdf` only when confidence is high.
-6. **Unsorted** files are split by type: `_Unsorted/Images`, `Videos`, `Audio`, `PDFs`, `Documents`, `Installers`, `Archives`, `Other`.
+6. **Unsorted** files are split by type: `_Unsorted/Images`, `Videos`, `Audio`, `PDFs`, `Documents`, `Installers`, `Other` (archives are never moved, see 13).
 7. **Files already in the target structure** are left alone unless a high-confidence rule applies.
 8. **Version chains** ("report v3", "final_FINAL", "(1)", "copy of"): only the older files are forced to `N`; the newest keeps its normal default. They are listed in the report as "likely old versions".
 9. **Which duplicate to keep**: the best location (Documents, then Pictures, Videos, OneDrive, Desktop, Downloads), then a clean name, then the oldest created date, then the shortest path. Empty files are never treated as duplicates. Others go to `_Duplicates` with a note naming the kept copy.
 10. **Look-alike photos** (perceptual hash distance of 6 or less) are only shown in the report, never moved.
 11. **Dates in PDFs** are read as US order (MM/DD/YYYY); set `rules: pdf: date_order: DMY` to change. The first 2 pages are read.
 12. **Long-path prefix** is applied when a path reaches 240 characters.
-13. **CSV files** are UTF-8 with BOM and comma-separated (configurable), so Excel opens them cleanly.
-14. **Moves out of OneDrive** are always approved `N` with a WARNING note.
-15. **Recycle Bin mode** is allowed but not undoable (see above). The default is the review folder.
-16. **Migrate**: folders Documents, Pictures, Videos, Downloads plus `_Unsorted`, `_Duplicates`, `_Review_Delete`; target `D:\<FolderName>`; OneDrive skipped; 1024 MB free-space margin; a dry run must create `migrate_manifest.csv` first; empty source folders are left behind; Windows folder locations are not changed automatically.
-17. **No scheduled task.** `tidyup upkeep` is the on-demand quick tidy; it asks once before moving anything unless `--yes`.
-18. **Screenshot detection** adds up points: name starting with "screenshot", "screen shot", "capture" or "snip"; being in the Screenshots folder; PNG; no camera data; a size matching a common screen; a phone-like shape. Camera data counts against. The reasons are written in `notes`.
-19. Photo file types: jpg, jpeg, heic, heif, dng, cr2, nef, arw, tif, tiff. Video types: mp4, mov, avi, mkv, wmv, m4v, 3gp, webm, mts, m2ts. Excluded by default: `desktop.ini`, `thumbs.db`, `~$*`, `*.tmp`, `*.crdownload`, `*.part`, `*.partial`, `*.lnk`, `*.url`.
+13. **Archives stay where they are**: `.zip .7z .rar .tar .gz .tgz .bz2 .xz .iso` files are never moved, renamed or sent to `_Duplicates`; they show as `skip` rows. Set `rules: archives: keep_in_place: false` in `config.yaml` to collect Downloads archives into `Downloads\Archives` instead.
+14. **CSV files** are UTF-8 with BOM and comma-separated (configurable), so Excel opens them cleanly.
+15. **Moves out of OneDrive** are always approved `N` with a WARNING note.
+16. **Recycle Bin mode** is allowed but not undoable (see above). The default is the review folder.
+17. **Migrate**: folders Documents, Pictures, Videos, Downloads plus `_Unsorted`, `_Duplicates`, `_Review_Delete`; target `D:\<FolderName>`; OneDrive skipped; 1024 MB free-space margin; a dry run must create `migrate_manifest.csv` first; empty source folders are left behind; Windows folder locations are not changed automatically.
+18. **No scheduled task.** `tidyup upkeep` is the on-demand quick tidy; it asks once before moving anything unless `--yes`.
+19. **Screenshot detection** adds up points: name starting with "screenshot", "screen shot", "capture" or "snip"; being in the Screenshots folder; PNG; no camera data; a size matching a common screen; a phone-like shape. Camera data counts against. The reasons are written in `notes`.
+20. Photo file types: jpg, jpeg, heic, heif, dng, cr2, nef, arw, tif, tiff. Video types: mp4, mov, avi, mkv, wmv, m4v, 3gp, webm, mts, m2ts. Excluded by default: `desktop.ini`, `thumbs.db`, `~$*`, `*.tmp`, `*.crdownload`, `*.part`, `*.partial`, `*.lnk`, `*.url`.
 
 ---
 

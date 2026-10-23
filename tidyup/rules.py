@@ -360,6 +360,15 @@ def _classify_document(record: FileRecord, ctx: RuleContext, ext: str) -> Propos
                     "document", Confidence.LOW, ["no category keywords found"])
 
 
+KEPT_ARCHIVE_NOTE = "archive: kept in its folder"
+
+
+def is_kept_archive(record: FileRecord, cfg: Config) -> bool:
+    """True when this file is an archive that must stay where it is (rules.archives.keep_in_place)."""
+    arc = cfg.rules.get("archives", {})
+    return bool(arc.get("keep_in_place", True)) and record.extension.lower() in arc.get("extensions", [])
+
+
 def _classify(record: FileRecord, ctx: RuleContext) -> Proposal:
     cfg, now = ctx.cfg, ctx.now
     ext = record.extension.lower()
@@ -376,7 +385,10 @@ def _classify(record: FileRecord, ctx: RuleContext) -> Proposal:
         return Proposal("file", _structure_dir(cfg, "installers", "Installers"), None, "installer",
                         Confidence.HIGH, [f"installer, modified {max(age.days, 0)} days ago"])
     arc = rules["archives"]
-    if ext in arc["extensions"] and _in_listed_folders(record, arc.get("only_in"), cfg):
+    if is_kept_archive(record, cfg):
+        return Proposal("skip", None, None, "archive", Confidence.HIGH, [KEPT_ARCHIVE_NOTE])
+    if (not arc.get("keep_in_place", True) and ext in arc["extensions"]
+            and _in_listed_folders(record, arc.get("only_in"), cfg)):
         return Proposal("file", _structure_dir(cfg, "archives", "Archives"), None, "archive",
                         Confidence.HIGH, ["archive file"])
 

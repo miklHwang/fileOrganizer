@@ -95,6 +95,9 @@ def build_manifest(cfg: Config, records: Sequence[FileRecord], *,
                 action, conf = Action.MOVE, Confidence.MEDIUM
                 dest = _atomic_destination(cfg, rec)
                 notes = ["atomic folder: moved whole, contents untouched"]
+        elif k in keeper_of and rules.is_kept_archive(rec, cfg):
+            rule, conf = "archive", Confidence.HIGH
+            notes = [rules.KEPT_ARCHIVE_NOTE, f"same content as {keeper_of[k][0].path}"]
         elif k in keeper_of:
             keeper, sha = keeper_of[k]
             action, rule, conf = Action.DUPLICATE, "exact_duplicate", Confidence.HIGH

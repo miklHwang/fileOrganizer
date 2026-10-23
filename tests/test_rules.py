@@ -90,11 +90,36 @@ def test_installers_and_archives(fake_tree, cfg, ctx):
     new = cls(fake_tree, cfg, ctx, "installer_new")
     assert (new.kind, new.rule, new.confidence, new.logical_dir) == (
         "file", "installer", Confidence.HIGH, "Installers")
+    for h in ("archive_zip", "archive_7z"):
+        a = cls(fake_tree, cfg, ctx, h)
+        assert (a.kind, a.rule, a.confidence, a.logical_dir) == ("skip", "archive", Confidence.HIGH, None)
+        assert a.notes == ["archive: kept in its folder"]
+
+
+def test_archives_collected_when_not_kept(fake_tree, cfg, ctx):
+    cfg.rules["archives"]["keep_in_place"] = False
     assert cls(fake_tree, cfg, ctx, "archive_zip").logical_dir == "Archives"
     assert cls(fake_tree, cfg, ctx, "archive_7z").rule == "archive"
 
 
+def test_archive_kept_in_any_folder(fake_tree, cfg, ctx):
+    for name in ("x.zip", "x.tar", "x.iso"):
+        f = fake_tree.folders["documents"] / name
+        f.write_bytes(b"abc")
+        p = rules.classify(make_record(f, cfg), ctx)
+        assert p.kind == "skip" and p.rule == "archive"
+
+
+@pytest.mark.parametrize("name", ["X.ZIP", "a.gz", "b.iso"])
+def test_archive_variants_outside_downloads(fake_tree, cfg, ctx, name):
+    f = fake_tree.folders["documents"] / name
+    f.write_bytes(b"abc")
+    p = rules.classify(make_record(f, cfg), ctx)
+    assert p.kind == "skip" and p.rule == "archive"
+
+
 def test_installer_archive_only_in_downloads(fake_tree, cfg, ctx, tmp_path):
+    cfg.rules["archives"]["keep_in_place"] = False
     for name, group in (("x.exe", "Installers"), ("x.zip", "Archives")):
         f = fake_tree.folders["documents"] / name
         f.write_bytes(b"abc")

@@ -107,3 +107,23 @@ def test_confirmation(cfg, fake_tree, crafted, monkeypatch):
     # --yes proceeds
     assert upkeep.command(cfg, _args(yes=True)) == 0
     assert len(list(dest.iterdir())) == 2
+
+
+def test_upkeep_leaves_archives(cfg, fake_tree):
+    paths = [fake_tree.folders["downloads"] / "u.zip", fake_tree.folders["desktop"] / "v.7z"]
+    for p in paths:
+        p.write_bytes(b"PK" + p.name.encode())
+    _u, selected, _p = upkeep._prepare(cfg, dry_run=True)
+    assert not [r for r in selected if r.source in paths]
+    upkeep.run_upkeep(cfg)
+    for p in paths:
+        assert p.read_bytes() == b"PK" + p.name.encode()
+
+
+def test_upkeep_moves_archive_when_not_kept(cfg, fake_tree):
+    cfg.rules["archives"]["keep_in_place"] = False
+    z = fake_tree.folders["downloads"] / "u.zip"
+    z.write_bytes(b"PKu")
+    upkeep.run_upkeep(cfg)
+    assert not z.exists()
+    assert (fake_tree.folders["downloads"] / "Archives" / "u.zip").read_bytes() == b"PKu"

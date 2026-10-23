@@ -132,7 +132,8 @@ def is_cloud_only(path) -> bool                           # is_cloud_only_attrs(
 def assert_local(path, known_cloud_only: bool = False) -> None
     # raise CloudOnlyError(f"... is an online-only OneDrive file; not reading it") if known_cloud_only or is_cloud_only(path)
 def is_hidden_or_system(name: str, attrs: int) -> bool
-    # attrs & (HIDDEN|SYSTEM) -> True; on non-Windows also name.startswith(".")
+    # attrs & (HIDDEN|SYSTEM) -> True; also name.startswith(".") on ALL OSes (orchestrator decision after Windows CI:
+    # dot-files like .gitconfig/.vscode are conventionally hidden; SPEC says never touch hidden files, so skip them everywhere)
 def file_times(st: os.stat_result) -> tuple[datetime, datetime]
     # (created, modified). created = st_birthtime if present, elif is_windows(): st_ctime, else min(st_ctime, st_mtime)
 def norm_key(path) -> str                                 # os.path.normcase(os.path.normpath(os.path.abspath(strip_long_path(path))))

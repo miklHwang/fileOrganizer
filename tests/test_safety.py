@@ -133,3 +133,7 @@ def test_trusted_prefix_does_not_bypass_systemroot(tmp_path, monkeypatch):
     monkeypatch.setenv("SystemRoot", str(tmp_path / "sysroot"))
     monkeypatch.setattr(safety, "TRUSTED_PREFIXES", (tmp_path,))
     assert safety.is_protected(tmp_path / "sysroot" / "a")
+
+
+def test_partial_prefix_matches_fsops():
+    assert safety.PARTIAL_PREFIX == fsops.PARTIAL_PREFIX

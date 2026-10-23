@@ -5,10 +5,12 @@ import fnmatch
 import os
 from pathlib import Path
 
-from tidyup import fsops, winutil
+from tidyup import winutil
 from tidyup.config import Config
 from tidyup.errors import UnsafePathError
 
+# Duplicated from fsops (avoids an import cycle); tests assert equality.
+PARTIAL_PREFIX = "~tidyup-partial-"
 PROTECTED_NAMES = frozenset({"programdata", "appdata", "$recycle.bin", "system volume information"})
 PROTECTED_GLOBS = ("program files*",)
 # Production default: empty (strict). Tests only: the conftest autouse fixture monkeypatches it, because on
@@ -63,7 +65,7 @@ def is_excluded(path: Path, cfg: Config) -> bool:
             return True
     if winutil.is_within(path, cfg.work_dir):
         return True
-    return path.name.startswith(fsops.PARTIAL_PREFIX)
+    return path.name.startswith(PARTIAL_PREFIX)
 
 
 def _is_root(path: Path, cfg: Config) -> bool:

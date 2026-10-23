@@ -5,12 +5,12 @@ Source of truth for requirements: `docs/SPEC.md`. This file is the source of tru
 ## Progress
 
 Phase 1 (foundation): [ ] P1-T1 [ ] P1-T2 [ ] P1-T3 [ ] P1-T4 [ ] P1-T5 [ ] P1-T6
-Phase 2 (building blocks): [ ] P2-T1 [ ] P2-T2 [ ] P2-T3 [ ] P2-T4 [ ] P2-T5 [ ] P2-T6
+Phase 2 (building blocks): [ ] P2-T1 [ ] P2-T2 [ ] P2-T3 [ ] P2-T4 ~~P2-T5~~ (removed) [ ] P2-T6
 Phase 3 (commands): [ ] P3-T1 [ ] P3-T2 [ ] P3-T3 [ ] P3-T4 [ ] P3-T5 [ ] P3-T6
 Phase 4 (planning + upkeep): [ ] P4-T1 [ ] P4-T2
 Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
 
-23 tasks. Per-task checkboxes are repeated in §4.
+22 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
 ---
 
@@ -23,7 +23,7 @@ Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
 5. Only `tidyup/models.py` reads/writes inventory/manifest CSV. Only `tidyup/journal.py` reads/writes undo logs. Only `tidyup/fsops.py` mutates user files. Only `tidyup/winutil.py` calls `subprocess`, `winreg`, `send2trash`, reads `st_file_attributes`.
 6. Forbidden everywhere except the allowlist in §2 (enforced by `tests/test_static_safety.py`): `os.remove`, `os.unlink`, `os.rmdir`, `os.removedirs`, `os.replace`, `shutil.rmtree`, `shutil.move`, any `.unlink(` / `.rmdir(` call, `send2trash`.
 7. User-facing failures raise a subclass of `errors.TidyupError` with a plain-English message. Print through `tidyup.console`, never bare `print` in library code (except `console.py`).
-8. Tests must pass on ubuntu-latest and windows-latest: use `tmp_path`, close every file/PIL image (`with`), never depend on POSIX permissions, never call real Windows APIs (mock `winutil`). Windows-only behaviour is tested by mocking `winutil.is_windows`, `winutil.run_schtasks`, `winutil.get_file_attributes`, `winutil.same_volume`, `winutil.free_space`.
+8. Tests must pass on ubuntu-latest and windows-latest: use `tmp_path`, close every file/PIL image (`with`), never depend on POSIX permissions, never call real Windows APIs (mock `winutil`). Windows-only behaviour is tested by mocking `winutil.is_windows`, `winutil.get_file_attributes`, `winutil.same_volume`, `winutil.free_space`.
 9. Module stubs created in P1-T1 contain the exact signatures and dataclasses from §2 with bodies `raise NotImplementedError`. The task that fills a module keeps every listed signature/dataclass unchanged; it may add private helpers (`_name`).
 
 ---
@@ -61,8 +61,7 @@ tidyup/
   apply.py         `tidyup apply`
   undo.py          `tidyup undo`
   migrate.py       `tidyup migrate`
-  schedule.py      `tidyup schedule install|remove`
-  upkeep.py        `tidyup upkeep` (what the scheduled task runs)
+  upkeep.py        `tidyup upkeep` (on-demand quick tidy; no scheduled task)
   cli.py           argparse, config resolution, dispatch, friendly errors
 tests/
   conftest.py              shared fixtures (fake tree, cfg, mocks, open spy)
@@ -91,7 +90,7 @@ class FileLockedError(TidyupError): ...    # in use / permission denied
 class VerifyError(TidyupError): ...        # SHA-256 mismatch after copy
 class InsufficientSpaceError(TidyupError): ...
 class ManifestError(TidyupError): ...
-class NotSupportedError(TidyupError): ...  # e.g. schedule on non-Windows
+class NotSupportedError(TidyupError): ...  # e.g. a Windows-only operation on non-Windows
 ```
 
 #### console.py (P1-T1)
@@ -149,8 +148,6 @@ def same_volume(a, b) -> bool          # st_dev of nearest existing ancestor of 
 def free_space(path) -> int            # shutil.disk_usage(nearest existing ancestor).free
 def is_lock_error(exc: OSError) -> bool
     # True for PermissionError, getattr(exc,"winerror",None) in (5, 32, 33), errno in (EACCES, EBUSY, ETXTBSY)
-def run_schtasks(args: list[str]) -> subprocess.CompletedProcess[str]   # subprocess.run(["schtasks", *args], capture_output=True, text=True)
-def scheduler_python() -> Path         # pythonw.exe beside sys.executable if it exists, else sys.executable
 def send_to_recycle_bin(path) -> None  # send2trash.send2trash(strip_long_path(path))
 ```
 
@@ -294,7 +291,6 @@ class Config:
     naming: dict
     rules: dict
     upkeep: dict
-    schedule: dict
     migrate: dict
     report: dict
     csv: dict
@@ -322,7 +318,7 @@ Resolution rules:
 - `sources`: each entry is a folder key or a literal path. Drop entries that are None or missing on disk (console.warn once). De-duplicate: if a source is inside another source (OneDrive Known Folder Backup puts Documents inside OneDrive), drop the inner one and `console.info` that it is covered by the outer one. `in_onedrive` = `cfg.in_onedrive(path)`.
 - `work_dir` relative → relative to `config_dir`.
 - `exclusions.paths` → list[Path].
-- Validation (raise `ConfigError` with the key name): unknown top-level key; `delete_mode` not in {review, recycle_bin}; `version != 1`; YAML syntax error (include line number); structure templates whose first segment is not one of the roots below; `schedule.time` not `HH:MM`.
+- Validation (raise `ConfigError` with the key name): unknown top-level key; `delete_mode` not in {review, recycle_bin}; `version != 1`; YAML syntax error (include line number); structure templates whose first segment is not one of the roots below.
 - `resolve_destination(logical_dir, source)`: `logical_dir` is POSIX-style, e.g. `"Documents/Finance"`, `"Pictures/Photos/2024/2024-07"`, `"_Unsorted/PDFs"`.
   - `dest_root` set → `dest_root / logical_dir`.
   - In place: first segment (case-insensitive) `Documents|Pictures|Videos` → `folders[documents|pictures|videos] / rest`; `Installers|Archives` → `folders["downloads"] / logical_dir`; `_Unsorted|_Duplicates|_Review_Delete` → `folders["home"] / logical_dir`. If the needed folder is None, fall back to `home / logical_dir`.
@@ -409,7 +405,6 @@ rules:
 upkeep:
   sources: [downloads, desktop, screenshots]
   actions: [move, rename, move_rename]
-schedule: {task_name: tidyup-upkeep, time: "12:30"}
 migrate:
   folders: [documents, pictures, videos, downloads, "{home}/_Unsorted", "{home}/_Duplicates", "{home}/_Review_Delete"]
   include_onedrive: false
@@ -679,33 +674,22 @@ def command(cfg: Config, args: argparse.Namespace) -> int   # args.to, args.mani
 `command`: `--dry-run` → build, write `cfg.migrate_manifest_path` (this is the review step), print totals and space check result (never moves). Real run → manifest = `--manifest` or `cfg.migrate_manifest_path`; missing → TidyupError "Run 'tidyup migrate --to X --dry-run' first and review migrate_manifest.csv"; re-run `check_space` for remaining rows (refuse → exit 1, nothing moved); confirm; `run_migration`.
 `run_migration`: resumable — if `list_runs` has an unfinished `kind="migrate"` run with `meta.to == str(to_root)`, `Journal.resume` it; rows whose source no longer exists and whose destination exists → count as done; every move uses `adopt_identical=True` so a destination copied before the interruption is verified and adopted, never duplicated. Uses `fsops.move_file`/`move_tree` (copy→verify→remove when cross-volume). Ends with instructions on pointing Windows' Documents/Pictures/Videos "Location" tab at the new folders.
 
-#### schedule.py (P2-T5)
-```python
-def wrapper_path(cfg: Config) -> Path                         # cfg.work_dir / "tidyup_upkeep.cmd"
-def build_wrapper_script(cfg: Config, repo_root: Path, python: Path) -> str
-    # '@echo off\r\ncd /d "<repo_root>"\r\n"<python>" -m tidyup upkeep --config "<cfg.path>" >> "<logs_dir>\\upkeep.log" 2>&1\r\n'
-def build_create_args(cfg: Config, script: Path) -> list[str]
-    # ["/Create", "/TN", task_name, "/TR", f'"{script}"', "/SC", "DAILY", "/ST", time, "/F"]
-def build_delete_args(cfg: Config) -> list[str]               # ["/Delete", "/TN", task_name, "/F"]
-def install(cfg: Config, *, dry_run: bool = False) -> int
-def remove(cfg: Config, *, dry_run: bool = False) -> int
-def command(cfg: Config, args: argparse.Namespace) -> int     # args.action in {"install","remove"}
-```
-`repo_root` = parent of the `tidyup` package dir; `python` = `winutil.scheduler_python()`. `cfg.path` None → TidyupError "Save a config.yaml first". Dry run prints the script and `schtasks` command, touches nothing. Non-dry-run on non-Windows → `NotSupportedError`. Non-zero schtasks return → TidyupError with its stderr. `remove` does not delete the wrapper script (it is overwritten on next install).
+#### schedule.py — REMOVED
+No scheduled task (user runs tidyup as needed). Do not create `tidyup/schedule.py`; no code may call `schtasks`.
 
 #### upkeep.py (P4-T2)
 ```python
 def run_upkeep(cfg: Config, *, dry_run: bool = False) -> ApplyResult
 def command(cfg: Config, args: argparse.Namespace) -> int
 ```
-`ucfg = cfg.with_sources(cfg.upkeep["sources"])`; `scan.scan_sources(ucfg, show_progress=False)`; `plan.build_manifest(ucfg, records)`; write the manifest to `logs/upkeep_manifest_<YYYYMMDD-HHMMSS>.csv` (the reviewable record); `apply.select_rows(rows, ucfg, actions={Action(a) for a in upkeep.actions}, min_confidence=HIGH)` — `review_delete` and `duplicate` can never be selected; `apply.apply_rows(..., kind="upkeep")`; append one summary line to `logs/upkeep.log`. No prompts.
+`ucfg = cfg.with_sources(cfg.upkeep["sources"])`; `scan.scan_sources(ucfg, show_progress=False)`; `plan.build_manifest(ucfg, records)`; write the manifest to `logs/upkeep_manifest_<YYYYMMDD-HHMMSS>.csv` (the reviewable record); `apply.select_rows(rows, ucfg, actions={Action(a) for a in upkeep.actions}, min_confidence=HIGH)` — `review_delete` and `duplicate` can never be selected; `apply.apply_rows(..., kind="upkeep")`; append one summary line to `logs/upkeep.log`. Confirmation (in `command`, same helper/behaviour as apply): print the number of selected rows and the upkeep manifest path, then ask `Proceed? [y/N]` unless `args.yes`; non-interactive without `--yes` → refused, exit 1, nothing moved. `--dry-run` prints the planned operations and moves nothing.
 
 #### cli.py (P2-T1)
 ```python
 def build_parser() -> argparse.ArgumentParser
 def main(argv: Sequence[str] | None = None) -> int
 ```
-Grammar: `python -m tidyup [--config PATH] [--dry-run] [--debug] [--version] COMMAND ...` where `--config`, `--dry-run`, `--debug` are also accepted after the command (shared parent parser with `default=argparse.SUPPRESS` on subparsers). Commands and args (attribute names exact): `scan`; `plan`; `report [--open]`; `apply [--manifest PATH] [--limit N] [--only-rule NAME] [--only-folder NAME] [--yes]`; `undo [run_id] [--list]`; `migrate --to PATH [--manifest PATH] [--yes]`; `schedule {install,remove}` (dest `action`); `upkeep`. Namespace always has `command, config, dry_run, debug` (+ the command's own: `open, manifest, limit, only_rule, only_folder, yes, run_id, list, to, action`).
+Grammar: `python -m tidyup [--config PATH] [--dry-run] [--debug] [--version] COMMAND ...` where `--config`, `--dry-run`, `--debug` are also accepted after the command (shared parent parser with `default=argparse.SUPPRESS` on subparsers). Commands and args (attribute names exact): `scan`; `plan`; `report [--open]`; `apply [--manifest PATH] [--limit N] [--only-rule NAME] [--only-folder NAME] [--yes]`; `undo [run_id] [--list]`; `migrate --to PATH [--manifest PATH] [--yes]`; `upkeep [--yes]`. Namespace always has `command, config, dry_run, debug` (+ the command's own: `open, manifest, limit, only_rule, only_folder, yes, run_id, list, to`).
 Config: `--config` given → must exist else ConfigError; else `config.find_default_config()`; else packaged defaults. Dispatch lazily: `importlib.import_module(f"tidyup.{name}").command(cfg, args)`.
 Errors: `TidyupError` → `console.error(msg)`, exit 1. `KeyboardInterrupt` → "Interrupted. Changes made so far are logged and can be reversed with 'tidyup undo'.", exit 130. Other exceptions → friendly one-liner + traceback written to `<work_dir>/logs/crash_<YYYYMMDD-HHMMSS>.txt` (path printed), exit 1; `--debug` re-raises. argparse errors exit 2.
 
@@ -796,7 +780,7 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 #### - [ ] P1-T1 Package skeleton, tooling, errors, console
 - Goal: importable package and all module stubs so later tasks fill modules in parallel.
-- Owns: `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`, `.gitignore`, `tidyup/__init__.py`, `tidyup/__main__.py`, `tidyup/errors.py`, `tidyup/console.py`, stubs `tidyup/{cli,scan,extract,rules,dupes,plan,fsops,apply,undo,migrate,report,schedule,upkeep}.py`, `tests/test_console.py`, `tests/test_skeleton.py`.
+- Owns: `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`, `.gitignore`, `tidyup/__init__.py`, `tidyup/__main__.py`, `tidyup/errors.py`, `tidyup/console.py`, stubs `tidyup/{cli,scan,extract,rules,dupes,plan,fsops,apply,undo,migrate,report,upkeep}.py`, `tests/test_console.py`, `tests/test_skeleton.py`.
 - Reads: SPEC, PLAN. Depends: none.
 - Acceptance: stubs carry the exact §1.3 signatures/dataclasses (`raise NotImplementedError`), import Phase-1 types only under `TYPE_CHECKING`, every module imports cleanly; cli stub `main()` supports `--version` only; `python -m tidyup --version` prints `tidyup 0.1.0`; console functions per §1.3.
 - Tests: import every `tidyup.*` module; `python -m tidyup --version` via subprocess; `human_size` table; `confirm` with assume_yes / non-TTY; `progress` yields all items.
@@ -804,7 +788,7 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 #### - [ ] P1-T2 Windows helper layer (parallel)
 - Owns: `tidyup/winutil.py`, `tests/test_winutil.py`. Reads: errors.py. Depends: P1-T1.
 - Acceptance: §1.3 winutil exactly; no other module needed; works on Linux and Windows.
-- Tests: `long_path` formats with `is_windows` mocked True/False (drive, UNC, already-prefixed, short); `strip_long_path` round trip; cloud-only mask for each of the 3 bits; `assert_local` raises/doesn't; `is_hidden_or_system`; `is_lock_error` for PermissionError, winerror 32, EBUSY; `is_within`/`norm_key`; `same_volume` same dir True; `free_space` > 0; `known_folders` keys (non-Windows path; Windows branch with a fake `winreg` module injected); `onedrive_root` via env; `run_schtasks` calls subprocess (mock `subprocess.run`); `file_times` returns datetimes.
+- Tests: `long_path` formats with `is_windows` mocked True/False (drive, UNC, already-prefixed, short); `strip_long_path` round trip; cloud-only mask for each of the 3 bits; `assert_local` raises/doesn't; `is_hidden_or_system`; `is_lock_error` for PermissionError, winerror 32, EBUSY; `is_within`/`norm_key`; `same_volume` same dir True; `free_space` > 0; `known_folders` keys (non-Windows path; Windows branch with a fake `winreg` module injected); `onedrive_root` via env; `file_times` returns datetimes.
 
 #### - [ ] P1-T3 Data models, CSV I/O, undo journal (parallel)
 - Owns: `tidyup/models.py`, `tidyup/journal.py`, `tests/test_models.py`, `tests/test_journal.py`. Reads: errors.py. Depends: P1-T1.
@@ -848,10 +832,7 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 - Acceptance: §1.3 dupes; deterministic output; 20,000 synthetic phashes grouped in < 30 s.
 - Tests: exact groups ignore cloud-only/no-hash/zero-size; keeper prefers Documents over Downloads, clean name over "(1)", older created; `normalize_version_stem` table (`report v3`, `final_FINAL`, `Copy of x`, `x - Copy (2)`, `x (1)`, `x_v2`, `draft`); chains require ≥2 members in same dir/ext; current = newest; near-dup grouping with threshold and exact-dup exclusion; performance test.
 
-#### - [ ] P2-T5 schedule
-- Owns: `tidyup/schedule.py`, `tests/test_schedule.py`. Reads: winutil.py, config.py, console.py, errors.py. Depends: Phase 1.
-- Acceptance: §1.3 schedule; only `winutil.run_schtasks` touches the OS scheduler.
-- Tests: create/delete args exact; wrapper script content (CRLF, quoted paths, `upkeep --config`); install writes wrapper and calls mocked `run_schtasks` (is_windows mocked True); non-Windows → NotSupportedError → friendly; dry run calls nothing; schtasks failure → TidyupError with stderr; no config file → TidyupError.
+#### ~~P2-T5 schedule~~ — REMOVED (tidyup is run as needed; no scheduled task)
 
 #### - [ ] P2-T6 GitHub Actions workflow
 - Owns: `.github/workflows/tests.yml`. Reads: requirements files. Depends: P1-T1.
@@ -899,8 +880,8 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 #### - [ ] P4-T2 upkeep
 - Owns: `tidyup/upkeep.py`, `tests/test_upkeep.py`. Reads: scan, plan, apply, config, models, console. Depends: P3-T1, P3-T3 (plan via its §1.3 interface).
-- Acceptance: §1.3 upkeep; never selects review_delete/duplicate or non-high rows.
-- Tests: `test_only_high_move_rename` — monkeypatch `plan.build_manifest` to return a crafted mix (high move, high rename, medium move, high review_delete, high duplicate, low move_rename) over fixture files; only the first two applied; upkeep manifest + `kind="upkeep"` journal written; upkeep.log line appended; sources limited to downloads/desktop/screenshots (scan called with `with_sources`); dry run changes nothing.
+- Acceptance: §1.3 upkeep; never selects review_delete/duplicate or non-high rows. Asks once before moving anything unless `--yes`.
+- Tests: `test_only_high_move_rename` — monkeypatch `plan.build_manifest` to return a crafted mix (high move, high rename, medium move, high review_delete, high duplicate, low move_rename) over fixture files; only the first two applied; upkeep manifest + `kind="upkeep"` journal written; upkeep.log line appended; sources limited to downloads/desktop/screenshots (scan called with `with_sources`); dry run changes nothing. `test_confirmation`: `command` with input 'n' moves nothing; non-interactive without `--yes` refused (exit 1, nothing moved); `--yes` proceeds.
 
 ### Phase 5 — Integration and docs (parallel; depend on Phase 4)
 
@@ -911,7 +892,7 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 #### - [ ] P5-T2 README.md
 - Owns: `README.md`. Reads: SPEC, PLAN, code. Depends: Phase 4.
-- Acceptance: written for a non-programmer: install Python on Windows (tick "Add python.exe to PATH"), download the repo (ZIP and git), create/activate a venv in PowerShell and cmd (incl. `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` note), `pip install -r requirements.txt`; edit config.yaml; first-run walkthrough exactly: scan → plan → review `manifest.csv` in Excel (change approved Y/N, save as CSV) and `report.html` → `apply --only-folder downloads --limit 50` → check results → `undo` test → full `apply`; D: migration (`migrate --to D:\ --dry-run`, review, run, resume, then change folder Location in Windows); scheduled task install/remove and what upkeep does; command reference; **Safety** section listing exactly what the tool will never do (S1–S14 in plain words, incl. Recycle Bin undo limitation); Defaults section (copy of §5); troubleshooting (locked files, OneDrive warnings, long paths).
+- Acceptance: written for a non-programmer: install Python on Windows (tick "Add python.exe to PATH"), download the repo (ZIP and git), create/activate a venv in PowerShell and cmd (incl. `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` note), `pip install -r requirements.txt`; edit config.yaml; first-run walkthrough exactly: scan → plan → review `manifest.csv` in Excel (change approved Y/N, save as CSV) and `report.html` → `apply --only-folder downloads --limit 50` → check results → `undo` test → full `apply`; D: migration (`migrate --to D:\ --dry-run`, review, run, resume, then change folder Location in Windows); what `tidyup upkeep` does and when to run it (on demand, whenever Downloads/Desktop get messy; there is no scheduled task); command reference; **Safety** section listing exactly what the tool will never do (S1–S14 in plain words, incl. Recycle Bin undo limitation); Defaults section (copy of §5); troubleshooting (locked files, OneDrive warnings, long paths).
 
 #### - [ ] P5-T3 CLAUDE.md
 - Owns: `CLAUDE.md`. Reads: SPEC, PLAN, code. Depends: Phase 4.
@@ -938,8 +919,8 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 14. **Moves out of OneDrive** are always approved=N with a WARNING note; cloud-only files are never moved out of OneDrive or across drives (that would download them).
 15. **Recycle Bin mode**: allowed, but `tidyup undo` cannot restore those items; it lists them for manual restore. Default is the review folder.
 16. **Migrate**: default folders Documents, Pictures, Videos, Downloads plus `_Unsorted`, `_Duplicates`, `_Review_Delete`; target `D:\<FolderName>`; OneDrive folders skipped; 1 GiB free-space margin; a dry run must create `migrate_manifest.csv` first; empty source folders are left behind; Windows known-folder locations are not changed automatically.
-17. **Schedule**: task `tidyup-upkeep`, daily 12:30, runs a generated `tidyup_data\tidyup_upkeep.cmd` (avoids the 261-char `/TR` limit) with `pythonw.exe` from the current venv; output appended to `logs\upkeep.log`.
-18. **Extra commands/options** beyond the spec: `tidyup upkeep` (run by the scheduled task), `apply --only-folder NAME` (for the "Downloads only" walkthrough step), `apply/migrate --yes`, `undo --list`, `report --open`, global `--debug`, `--version`.
-19. **`--dry-run`**: scan/plan/report compute and print but write nothing; apply/undo/upkeep print planned operations; schedule prints the command; migrate's dry run writes only `migrate_manifest.csv`.
+17. **No scheduled task** (user request): tidyup only runs when the user starts it. `tidyup upkeep` is the on-demand quick tidy; it asks once before moving anything unless `--yes`.
+18. **Extra commands/options** beyond the spec: `tidyup upkeep` (on-demand quick tidy), `apply --only-folder NAME` (for the "Downloads only" walkthrough step), `apply/migrate/upkeep --yes`, `undo --list`, `report --open`, global `--debug`, `--version`.
+19. **`--dry-run`**: scan/plan/report compute and print but write nothing; apply/undo/upkeep print planned operations; migrate's dry run writes only `migrate_manifest.csv`.
 20. **Exit codes**: 0 ok, 1 error/refused, 2 bad arguments, 130 interrupted. Interactive confirmation before apply/migrate unless `--yes`; non-interactive without `--yes` is refused.
 21. **Symlinks and junctions** are never followed or moved; created timestamps on non-Windows use birth time if available, else min(ctime, mtime).

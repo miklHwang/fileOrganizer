@@ -1,8 +1,10 @@
+AMENDMENT (2026-10-23, at the user's request): tidyup runs on an as-needed basis only. There is no scheduled/daily task; the `schedule` command is dropped and upkeep is an on-demand command the user runs when they want.
+
 Build "tidyup", a Python command-line file organizer for my Windows 10/11 PC. I'll clone this repo and run it locally. The build happens in a Linux cloud environment, so all Windows-specific code must sit behind small functions that tests can mock. Builders make sensible defaults rather than stopping to ask, and note them in the README.
 
 GOALS
 1. One-time cleanup of my personal files: Documents, Desktop, Downloads, Pictures, Videos, and my OneDrive folder.
-2. Ongoing upkeep: a lightweight scheduled run that keeps Downloads, Desktop and the Screenshots folder tidy.
+2. Ongoing upkeep, as needed: a lightweight on-demand run (`tidyup upkeep`) that keeps Downloads, Desktop and the Screenshots folder tidy. No scheduled or daily task.
 3. Migration: later I'll move my organized files from C: to my D: drive, which has more space.
 
 HARD SAFETY RULES (non-negotiable)
@@ -29,7 +31,7 @@ COMMANDS
 - tidyup apply [--manifest path] [--limit N] [--only-rule name] — executes approved rows and writes logs/undo_<timestamp>.jsonl.
 - tidyup undo [run-id] — reverses a run from its log.
 - tidyup migrate --to D:\ [--dry-run] — moves organized folders to another drive using copy → verify → remove, resumable if interrupted. Checks free space first and refuses if there isn't enough.
-- tidyup schedule install|remove — creates or removes a daily Windows Task Scheduler job (via schtasks) that runs the upkeep profile. Upkeep auto-applies ONLY high-confidence move/rename rules on Downloads, Desktop and Pictures\Screenshots. No review_delete actions happen automatically.
+- tidyup upkeep [--yes] — on-demand quick tidy, run by the user whenever they want (no scheduled task). Upkeep auto-applies ONLY high-confidence move/rename rules on Downloads, Desktop and Pictures\Screenshots, after one confirmation prompt (skipped with --yes). No review_delete actions happen automatically.
 - Every command supports --config path and --dry-run. Show human-friendly output, not stack traces.
 
 CONFIG (config.yaml, heavily commented)
@@ -54,11 +56,11 @@ RULES
 
 ENGINEERING
 - Python 3.11+. Minimal dependencies: pyyaml, pypdf, Pillow, imagehash, python-docx, send2trash, tqdm. Put dev-only deps (pytest, reportlab for making test PDFs) in requirements-dev.txt.
-- Package layout: tidyup/ with separate modules for scan, rules, plan, apply/undo, migrate, report, schedule and windows helpers. The entry point is python -m tidyup.
+- Package layout: tidyup/ with separate modules for scan, rules, plan, apply/undo, migrate, report, upkeep and windows helpers. The entry point is python -m tidyup.
 - Tests (pytest): generate a realistic fake file tree in a temp dir with screenshots (PNG at screen resolutions), photos with EXIF camera data, PDFs with invoice/statement/syllabus text, exact duplicates, version chains, a git project folder, simulated cloud-only files (mock the attributes), and a name collision. Test that plan → apply → undo restores the tree byte-for-byte, that atomic folders are never split, that cloud-only files are never opened, and that cross-drive migrate verifies before removing.
 - Add a GitHub Actions workflow that runs the tests on windows-latest and ubuntu-latest.
 
 DOCS
-- README.md written for a non-programmer: installing Python on Windows (check "Add to PATH"), downloading the repo, creating a venv, installing requirements, and a "first run" walkthrough. The walkthrough should go: scan → plan → review manifest in Excel and report.html → apply on Downloads only with --limit 50 → check → undo test → full run. Also explain the D: migration and the scheduled task.
+- README.md written for a non-programmer: installing Python on Windows (check "Add to PATH"), downloading the repo, creating a venv, installing requirements, and a "first run" walkthrough. The walkthrough should go: scan → plan → review manifest in Excel and report.html → apply on Downloads only with --limit 50 → check → undo test → full run. Also explain the D: migration and the on-demand upkeep command.
 - CLAUDE.md: the folder structure, naming conventions, rule summary and safety rules, so future Claude sessions follow the same system.
 - A "Safety" section in the README listing exactly what the tool will never do.

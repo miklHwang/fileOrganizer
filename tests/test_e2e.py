@@ -73,15 +73,40 @@ def test_atomic_folders_never_split(cfg, fake_tree, mock_attrs):
     assert atomic_keys and docs.exists()
 
 
-def test_cloud_only_never_opened(cfg, fake_tree, mock_attrs, open_spy):
-    cloud = {winutil.norm_key(p).lower() for p in fake_tree.cloud_only}
+def test_cloud_only_never_opened(cfg, fake_tree, mock_attrs, open_spy, cross_volume, tmp_path):
+    cloud_paths = list(fake_tree.cloud_only)
+    assert cloud_paths
+    cloud = {winutil.norm_key(p).lower() for p in cloud_paths}
+    contents = {p: p.read_bytes() for p in cloud_paths}
+    open_spy.clear()  # setup reads above do not count
     records, rows = _plan(cfg, approve_all=True)
+    # not vacuous: the cloud-only files were really scanned and planned
+    by_key = {winutil.norm_key(r.path).lower(): r for r in records}
+    assert cloud <= set(by_key)
+    assert all(by_key[k].is_cloud_only for k in cloud)
+    row_by_key = {winutil.norm_key(r.source).lower(): r for r in rows}
+    assert cloud <= set(row_by_key)
+    assert all("cloud-only" in row_by_key[k].notes for k in cloud)
     report.build_report(cfg, records, rows)
     res = apply.apply_rows(cfg, apply.select_rows(rows, cfg))
     assert res.errors == 0
     upkeep.run_upkeep(cfg)
+    # migrate (dry run, then real, including OneDrive) and undo in the same spied flow
+    target = tmp_path / "D"
+    target.mkdir()
+    cfg.migrate["include_onedrive"] = True
+    migrate.command(cfg, argparse.Namespace(to=str(target), manifest=None, yes=True, dry_run=True))
+    mrows = models.read_manifest(cfg.migrate_manifest_path)
+    mres = migrate.run_migration(cfg, mrows, target)
+    assert mres.errors == 0
+    undo.undo_run(cfg, jr.find_run(cfg.logs_dir, mres.run_id))
+    undo.undo_run(cfg, jr.find_run(cfg.logs_dir, res.run_id))
     opened = {s.lower() for s in open_spy}
     assert not (opened & cloud), opened & cloud
+    # never moved off their volume / out of OneDrive, and never copied to the target
+    for p in cloud_paths:
+        assert p.exists() and p.read_bytes() == contents[p]
+    assert not [p for p in target.rglob("*") if p.is_file() and p.name in {c.name for c in cloud_paths}]
 
 
 def test_file_count_preserved(cfg, fake_tree, mock_attrs):
@@ -147,22 +172,29 @@ def test_migrate_then_undo_restores(cfg, fake_tree, mock_attrs, cross_volume, tm
     assert snapshot(home) == before
 
 
-def test_migrate_corrupt_copy_leaves_source(tmp_path, cross_volume, monkeypatch):
-    from tidyup import fsops
-
-    src = tmp_path / "s" / "f.bin"
-    src.parent.mkdir()
-    src.write_bytes(b"good data")
+def test_migrate_corrupt_copy_leaves_source(cfg, fake_tree, mock_attrs, cross_volume, tmp_path,
+                                            monkeypatch):
+    home = fake_tree.folders["home"]
+    target = tmp_path / "D"
+    target.mkdir()
+    before = snapshot(home)
+    migrate.command(cfg, argparse.Namespace(to=str(target), manifest=None, yes=True, dry_run=True))
+    rows = models.read_manifest(cfg.migrate_manifest_path)
+    assert any(r.action != Action.SKIP for r in rows)
 
     def bad_copy(a, b, **k):
         with open(b, "wb") as fh:
-            fh.write(b"bad")
+            fh.write(b"corrupt")
 
     monkeypatch.setattr(shutil, "copy2", bad_copy)
-    with pytest.raises(VerifyError):
-        fsops.move_file(src, tmp_path / "D" / "f.bin")
-    assert src.read_bytes() == b"good data"
-    assert not (tmp_path / "D" / "f.bin").exists()
+    rc = migrate.command(cfg, argparse.Namespace(to=str(target), manifest=None, yes=True,
+                                                 dry_run=False))
+    assert rc != 0
+    assert snapshot(home) == before  # every source still exists with its original bytes
+    leftovers = [p for p in target.rglob("*") if p.is_file()]
+    assert not leftovers, leftovers
+    run = jr.list_runs(cfg.logs_dir)[-1]
+    assert not [o for o in run.ops if o["type"] == "move"]
 
 
 def test_cli_walkthrough(fake_tree, mock_attrs, tmp_path, capsys):
@@ -175,5 +207,10 @@ def test_cli_walkthrough(fake_tree, mock_attrs, tmp_path, capsys):
     assert cli.main(base + ["plan"]) == 0
     assert snapshot(home) == before
     assert cli.main(base + ["apply", "--only-folder", "downloads", "--limit", "50", "--yes"]) == 0
+    assert snapshot(home) != before
+    from tidyup import config as _config
+    c = _config.load_config(conf)
+    runs = jr.list_runs(c.logs_dir)
+    assert runs and [o for o in runs[-1].ops if o["type"] == "move"]
     assert cli.main(base + ["undo"]) == 0
     assert snapshot(home) == before

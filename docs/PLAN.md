@@ -8,7 +8,7 @@ Phase 1 (foundation): [x] P1-T1 [x] P1-T2 [x] P1-T3 [x] P1-T4 [x] P1-T5 [x] P1-T
 Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (removed) [x] P2-T6
 Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
-Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
+Phase 5 (integration + docs): [x] P5-T1 [x] P5-T2 [x] P5-T3
 
 22 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
@@ -892,16 +892,16 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 ### Phase 5 — Integration and docs (parallel; depend on Phase 4)
 
-#### - [ ] P5-T1 End-to-end safety tests
+#### - [x] P5-T1 End-to-end safety tests
 - Owns: `tests/test_e2e.py`. Reads: everything. Depends: Phase 4.
 - Acceptance: tests drive the public functions (`scan.scan_sources`, `plan.build_manifest`, `models.write/read_manifest`, `apply.apply_rows`, `undo.undo_run`, `report.build_report`, `upkeep.run_upkeep`, `migrate`) and `cli.main([...,"--yes"])` once. Do not edit modules: report any defect found (file, function, failing assertion).
 - Tests: `test_plan_apply_undo_restores_tree_byte_for_byte` (all non-skip rows approved; snapshot of `home` identical after undo, incl. long-path file and collision pair); same with default approvals; `test_atomic_folders_never_split` (after apply each atomic dir's relative snapshot identical, nothing inside moved); `test_cloud_only_never_opened` (`open_spy` + `mock_attrs` through scan, plan, report, apply, upkeep); `test_file_count_preserved` after apply (nothing deleted; review_delete files present in `_Review_Delete`); cross-volume apply + undo with `cross_volume`; migrate to a `D` dir then undo restores; CLI walkthrough scan → plan → apply `--only-folder downloads --limit 50 --yes` → undo.
 
-#### - [ ] P5-T2 README.md
+#### - [x] P5-T2 README.md
 - Owns: `README.md`. Reads: SPEC, PLAN, code. Depends: Phase 4.
 - Acceptance: written for a non-programmer: install Python on Windows (tick "Add python.exe to PATH"), download the repo (ZIP and git), create/activate a venv in PowerShell and cmd (incl. `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` note), `pip install -r requirements.txt`; edit config.yaml; first-run walkthrough exactly: scan → plan → review `manifest.csv` in Excel (change approved Y/N, save as CSV) and `report.html` → `apply --only-folder downloads --limit 50` → check results → `undo` test → full `apply`; D: migration (`migrate --to D:\ --dry-run`, review, run, resume, then change folder Location in Windows); what `tidyup upkeep` does and when to run it (on demand, whenever Downloads/Desktop get messy; there is no scheduled task); command reference; **Safety** section listing exactly what the tool will never do (S1–S14 in plain words, incl. Recycle Bin undo limitation); Defaults section (copy of §5); troubleshooting (locked files, OneDrive warnings, long paths).
 
-#### - [ ] P5-T3 CLAUDE.md
+#### - [x] P5-T3 CLAUDE.md
 - Owns: `CLAUDE.md`. Reads: SPEC, PLAN, code. Depends: Phase 4.
 - Acceptance: for future Claude sessions: package/folder structure and module responsibilities, target folder structure, naming conventions (`YYYY-MM-DD_Category_Short-Description.pdf`, " (n)" collisions, rule names), rule summary and confidence table, hard safety rules + where each is enforced (§2), mockability conventions (§0), how to run tests, "never add a delete path outside fsops".
 - Tests: none.

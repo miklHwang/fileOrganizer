@@ -502,7 +502,7 @@ def pdf_text(path: Path, *, is_cloud_only: bool, max_pages: int = 2, max_chars: 
 def docx_text(path: Path, *, is_cloud_only: bool, max_chars: int = 20000) -> str
 def thumbnail_data_uri(path: Path, *, is_cloud_only: bool, max_px: int = 160) -> str | None   # "data:image/jpeg;base64,..."
 ```
-Every function first calls `winutil.assert_local(path, is_cloud_only)` (raises `CloudOnlyError`; callers must check the flag first and never rely on catching it). Corrupt/unsupported files return `None`/`""`; lock errors → `FileLockedError`. Files opened with `open(winutil.long_path(path), "rb")` inside `with`, passed as file objects to Pillow/pypdf/python-docx.
+Every function first checks `is_cloud_only or winutil.is_cloud_only(path)` and, if so, returns `None`/`""` WITHOUT opening the file (as built in P2-T3; a cloud-only file is therefore indistinguishable from a corrupt one — callers must check `is_cloud_only` themselves before calling and must not interpret an empty result as "no text" for cloud-only files). Corrupt/unsupported files return `None`/`""`; lock errors → `FileLockedError`. Files opened with `open(winutil.long_path(path), "rb")` inside `with`, passed as file objects to Pillow/pypdf/python-docx.
 
 #### dupes.py (P2-T4) — pure functions over records
 ```python

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import builtins
+import functools
 import io
 import os
 
@@ -73,9 +74,16 @@ def open_spy(monkeypatch) -> list[str]:
             pass
 
     def wrap(orig):
-        def inner(target, *a, **kw):
-            record(target)
-            return orig(target, *a, **kw)
+        @functools.wraps(orig, updated=())
+        def inner(*a, **kw):
+            if a:
+                record(a[0])
+            else:
+                for k in ("file", "fp", "stream", "path", "docx"):
+                    if k in kw:
+                        record(kw[k])
+                        break
+            return orig(*a, **kw)
         return inner
 
     monkeypatch.setattr(builtins, "open", wrap(builtins.open))

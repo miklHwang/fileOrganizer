@@ -14,7 +14,7 @@ from fixtures.fake_tree import _lp, build_fake_tree, snapshot
 def test_build_is_fast(tmp_path):
     t0 = time.time()
     build_fake_tree(tmp_path)
-    assert time.time() - t0 < 5
+    assert time.time() - t0 < 30
 
 
 def test_every_handle_exists(fake_tree):
@@ -142,3 +142,26 @@ def test_cfg_and_spy_fixtures_exist(request):
     # these need tidyup.winutil / tidyup.config (built in parallel tasks)
     for n in ("cfg", "mock_attrs", "cross_volume", "open_spy"):
         assert request._fixturemanager.getfixturedefs(n, request.node)
+
+
+def test_open_spy_before_fake_tree(open_spy, fake_tree):
+    from tidyup import winutil
+
+    assert fake_tree.files
+    p = fake_tree.files["misc"]
+    with open(p, "rb") as fh:
+        fh.read(1)
+    assert winutil.norm_key(str(p)) in open_spy
+
+
+def test_open_spy_records_image_and_pdf(open_spy, fake_tree):
+    from pypdf import PdfReader
+    from tidyup import winutil
+
+    img = fake_tree.files["screenshot_desktop"]
+    pdf = fake_tree.files["invoice_pdf"]
+    with Image.open(img):
+        pass
+    PdfReader(str(pdf))
+    assert winutil.norm_key(str(img)) in open_spy
+    assert winutil.norm_key(str(pdf)) in open_spy

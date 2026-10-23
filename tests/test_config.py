@@ -155,3 +155,45 @@ def test_deep_merge():
 def test_repo_config_identical_to_packaged_default():
     assert (REPO / "config.yaml").read_bytes() == (REPO / "tidyup" / "default_config.yaml").read_bytes()
     assert config.default_config_text() == (REPO / "config.yaml").read_text("utf-8")
+
+
+def test_ensure_app_config_creates_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    p = config.ensure_app_config()
+    assert p == tmp_path / "tidyup" / "config.yaml"
+    assert p.read_text("utf-8") == config.default_config_text()
+    p.write_text("version: 1\n# edited\n", "utf-8")
+    assert config.ensure_app_config() == p
+    assert p.read_text("utf-8") == "version: 1\n# edited\n"
+
+
+def test_find_default_config_frozen(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    assert config.is_frozen() is False and config.app_install_dir() is None
+    assert config.find_default_config(tmp_path) is None
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    monkeypatch.setattr("sys.executable", str(tmp_path / "x" / "tidyup.exe"))
+    assert config.is_frozen() is True
+    assert config.app_install_dir() == (tmp_path / "x").resolve()
+    assert config.find_default_config(tmp_path) == tmp_path / "tidyup" / "config.yaml"
+    assert (tmp_path / "tidyup" / "config.yaml").is_file()
+
+
+def test_frozen_app_dir_excluded_from_scan(fake_tree, mock_attrs, monkeypatch):
+    from tidyup import scan
+
+    base = config.load_config(None, overrides=fake_tree.config_overrides())
+    app = base.folders["downloads"] / "tidyup"
+    (app / "_internal").mkdir(parents=True)
+    (app / "tidyup.exe").write_bytes(b"MZ")
+    (app / "_internal" / "x.dll").write_bytes(b"dll")
+    with monkeypatch.context() as m:
+        m.setattr("sys.frozen", True, raising=False)
+        m.setattr("sys.executable", str(app / "tidyup.exe"))
+        cfg = config.load_config(None, overrides=fake_tree.config_overrides())
+        assert app.resolve() in cfg.exclusions["paths"]
+        res = scan.scan_sources(cfg, show_progress=False)
+        assert res.records
+        assert not [r for r in res.records if winutil.is_within(r.path, app)]
+    res2 = scan.scan_sources(config.load_config(None, overrides=fake_tree.config_overrides()), show_progress=False)
+    assert [r for r in res2.records if winutil.is_within(r.path, app)]

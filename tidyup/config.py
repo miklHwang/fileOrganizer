@@ -5,6 +5,7 @@ import copy
 import dataclasses
 import os
 import re
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import resources
@@ -136,7 +137,36 @@ def default_config_text() -> str:
     return resources.files("tidyup").joinpath("default_config.yaml").read_text("utf-8")
 
 
+def is_frozen() -> bool:
+    return bool(getattr(sys, "frozen", False))
+
+
+def app_home() -> Path:
+    return Path.home() / "tidyup"
+
+
+def app_install_dir() -> Path | None:
+    return Path(sys.executable).resolve().parent if is_frozen() else None
+
+
+def ensure_app_config() -> Path:
+    """Create app_home()/config.yaml from the defaults if missing. Never overwrites."""
+    path = app_home() / "config.yaml"
+    if not path.exists():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(winutil.long_path(path), "x", encoding="utf-8", newline="") as f:
+                f.write(default_config_text())
+        except FileExistsError:
+            pass
+        except OSError as e:
+            raise ConfigError(f"Cannot create the settings file {path}: {e.strerror or e}") from e
+    return path
+
+
 def find_default_config(cwd: Path | None = None) -> Path | None:
+    if is_frozen():
+        return ensure_app_config()
     p = (cwd or Path.cwd()) / "config.yaml"
     return p if p.is_file() else None
 
@@ -281,6 +311,9 @@ def load_config(path: Path | None = None, overrides: dict | None = None) -> Conf
     exclusions = dict(merged["exclusions"])
     exclusions["names"] = [str(n) for n in exclusions.get("names") or []]
     exclusions["paths"] = [Path(_expand(p)) for p in exclusions.get("paths") or []]
+    install = app_install_dir()
+    if install is not None:
+        exclusions["paths"].append(install)
     atomic = {"markers": [str(n) for n in merged["atomic"].get("markers") or []],
               "folder_names": [str(n) for n in merged["atomic"].get("folder_names") or []]}
     categories: dict[str, dict] = {}

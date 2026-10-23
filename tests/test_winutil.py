@@ -154,3 +154,32 @@ def test_file_times(tmp_path):
     f.write_text("x")
     c, m = winutil.file_times(f.stat())
     assert c.year >= 2000 and m.year >= 2000
+
+
+def test_open_path_missing_raises(tmp_path):
+    from tidyup.errors import TidyupError
+
+    with pytest.raises(TidyupError):
+        winutil.open_path(tmp_path / "nope.txt")
+
+
+def test_open_path_non_windows_uses_webbrowser(tmp_path, monkeypatch):
+    import webbrowser
+
+    f = tmp_path / "a.txt"
+    f.write_text("x")
+    calls = []
+    monkeypatch.setattr(winutil, "is_windows", lambda: False)
+    monkeypatch.setattr(webbrowser, "open", lambda url: calls.append(url))
+    winutil.open_path(f)
+    assert calls == [f.resolve().as_uri()]
+
+
+def test_open_path_windows_uses_startfile(tmp_path, monkeypatch):
+    f = tmp_path / "a.txt"
+    f.write_text("x")
+    calls = []
+    monkeypatch.setattr(winutil, "is_windows", lambda: True)
+    monkeypatch.setattr(os, "startfile", lambda p: calls.append(p), raising=False)
+    winutil.open_path(f)
+    assert calls == [str(f)]

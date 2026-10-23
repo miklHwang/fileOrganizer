@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from tidyup.errors import CloudOnlyError
+from tidyup.errors import CloudOnlyError, TidyupError
 
 FILE_ATTRIBUTE_READONLY = 0x1
 FILE_ATTRIBUTE_HIDDEN = 0x2
@@ -181,3 +181,16 @@ def is_lock_error(exc: OSError) -> bool:
 def send_to_recycle_bin(path: str | os.PathLike) -> None:
     import send2trash
     send2trash.send2trash(strip_long_path(path))
+
+
+def open_path(path: str | os.PathLike) -> None:
+    """Open a file or folder with the default app (Windows) or the browser (elsewhere)."""
+    p = Path(path)
+    if not os.path.exists(long_path(p)):
+        raise TidyupError(f"Cannot open {p}: it does not exist.")
+    if is_windows():
+        os.startfile(str(p))  # type: ignore[attr-defined]
+    else:
+        import webbrowser
+
+        webbrowser.open(p.resolve().as_uri())

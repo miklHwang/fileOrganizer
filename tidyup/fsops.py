@@ -135,8 +135,31 @@ def _discard_partial(temp: Path) -> None:
         pass
 
 
-def _remove_verified_source(src: Path, size: int, mtime_ns: int) -> None:
+def _is_same_file(a: Path, b: Path) -> bool:
+    """True if a and b are the same path (any spelling) or the same file (hardlink / same inode)."""
+    if winutil.norm_key(a) == winutil.norm_key(b):
+        return True
+    try:
+        sa, sb = os.stat(_long(a)), os.stat(_long(b))
+    except OSError:
+        return False
+    if sa.st_ino and sa.st_dev == sb.st_dev and sa.st_ino == sb.st_ino:
+        return True
+    try:
+        return os.path.samefile(_long(a), _long(b))
+    except OSError:
+        return False
+
+
+def _refuse_same(src: Path, dst: Path) -> None:
+    if _is_same_file(src, dst):
+        raise UnsafePathError(f"{src} and {dst} are the same file or folder; nothing was changed")
+
+
+def _remove_verified_source(src: Path, size: int, mtime_ns: int, dst: Path | None = None) -> None:
     """Remove a source file ONLY after its copy was verified and the source is unchanged."""
+    if dst is not None and _is_same_file(src, dst):
+        raise UnsafePathError(f"{src} is the same file as its destination; the original was kept")
     try:
         st = os.lstat(_long(src))
     except FileNotFoundError:
@@ -175,6 +198,8 @@ def _same_content(a: Path, b: Path) -> bool:
     sa, sb = _plain_file_stat(a), _plain_file_stat(b)
     if sa is None or sb is None or sa.st_size != sb.st_size:
         return False
+    if _is_same_file(a, b):
+        return False
     return sha256_file(a) == sha256_file(b)
 
 
@@ -198,8 +223,13 @@ def _partial_name(name: str) -> str:
 def _copy_verified(src: Path, final: Path, src_hash: str) -> None:
     """Copy src to a partial file next to final, verify, then rename without clobbering."""
     temp = final.parent / _partial_name(final.name)
-    if os.path.lexists(_long(temp)):
-        _discard_partial(temp)
+    n = 1
+    while os.path.lexists(_long(temp)):  # never touch a file this call did not create
+        n += 1
+        tag = f"{n}-"
+        temp = final.parent / (PARTIAL_PREFIX + tag + _partial_name(final.name)[len(PARTIAL_PREFIX):])
+        if len(temp.name) > 255:
+            temp = final.parent / (PARTIAL_PREFIX + tag + _partial_name(final.name)[len(PARTIAL_PREFIX):][: 255 - len(PARTIAL_PREFIX) - len(tag)])
     try:
         with _lock_guard(src):
             shutil.copy2(_long(src), _long(temp))
@@ -218,6 +248,7 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
     safety.assert_not_protected(dst.parent)
     st = _regular_stat(src)
     size, mtime_ns = st.st_size, st.st_mtime_ns
+    _refuse_same(src, dst)
 
     adopted = False
     final = dst
@@ -242,7 +273,7 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
         digest = sha256_file(src)
         assert dst_fp is not None
         _recheck_dest(final, *dst_fp)
-        _remove_verified_source(src, size, mtime_ns)
+        _remove_verified_source(src, size, mtime_ns, final)
     elif not cross:
         _no_clobber_rename(src, final)
     else:
@@ -251,7 +282,7 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
         digest = sha256_file(src)
         _copy_verified(src, final, digest)
         _recheck_dest(final, size)
-        _remove_verified_source(src, size, mtime_ns)
+        _remove_verified_source(src, size, mtime_ns, final)
 
     if journal is not None:
         journal.move(src=src, dst=final, row_id=row_id, action=action, is_dir=False,
@@ -287,6 +318,10 @@ def move_tree(src_dir: Path, dst_dir: Path, *, journal: Journal | None = None, r
         raise UnsafePathError(f"{src_dir} is not a folder")
     if winutil.is_within(dst_dir, src_dir):
         raise UnsafePathError("Cannot move a folder into itself")
+    if winutil.is_within(src_dir, dst_dir):
+        raise UnsafePathError("Cannot move a folder onto one of its own parent folders")
+    if os.path.lexists(_long(dst_dir)):
+        _refuse_same(src_dir, dst_dir)
 
     merge = adopt_identical and os.path.isdir(_long(dst_dir)) and not os.path.islink(_long(dst_dir))
     final = dst_dir if merge else unique_path(dst_dir)
@@ -338,7 +373,7 @@ def move_tree(src_dir: Path, dst_dir: Path, *, journal: Journal | None = None, r
         st = infos[f]
         dtarget, dsize, dmtime = dests[f]
         _recheck_dest(dtarget, dsize, dmtime)
-        _remove_verified_source(f, st.st_size, st.st_mtime_ns)
+        _remove_verified_source(f, st.st_size, st.st_mtime_ns, dtarget)
     for d in reversed(dirs):
         try:
             os.rmdir(_long(d))

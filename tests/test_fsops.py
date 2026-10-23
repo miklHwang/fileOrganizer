@@ -429,3 +429,64 @@ def test_cross_volume_long_name(tmp_path, cross_volume):
     src = w(tmp_path / "s" / name, b"data")
     r = fsops.move_file(src, tmp_path / "d" / name)
     assert r.dst.read_bytes() == b"data" and not src.exists()
+
+
+@pytest.mark.parametrize("adopt", [False, True])
+def test_move_file_onto_itself_refused(tmp_path, adopt):
+    f = w(tmp_path / "a.txt", b"precious")
+    with pytest.raises(UnsafePathError):
+        fsops.move_file(f, f, adopt_identical=adopt)
+    assert f.read_bytes() == b"precious"
+
+
+def test_move_file_case_variant_refused(tmp_path):
+    f = w(tmp_path / "a.txt", b"precious")
+    variant = tmp_path / "A.TXT"
+    if not variant.exists():
+        pytest.skip("case-sensitive filesystem")
+    for adopt in (False, True):
+        with pytest.raises(UnsafePathError):
+            fsops.move_file(f, variant, adopt_identical=adopt)
+    assert f.read_bytes() == b"precious"
+
+
+@pytest.mark.parametrize("adopt", [False, True])
+@pytest.mark.parametrize("cross", [False, True])
+def test_move_file_hardlink_refused(tmp_path, monkeypatch, adopt, cross):
+    f = w(tmp_path / "a.txt", b"precious")
+    link = tmp_path / "b.txt"
+    try:
+        os.link(f, link)
+    except (OSError, NotImplementedError):
+        pytest.skip("hardlinks unsupported")
+    if cross:
+        monkeypatch.setattr(winutil, "same_volume", lambda a, b: False)
+    with pytest.raises(UnsafePathError):
+        fsops.move_file(f, link, adopt_identical=adopt)
+    assert f.read_bytes() == b"precious" and link.read_bytes() == b"precious"
+    assert not fsops._same_content(f, link)
+    with pytest.raises(UnsafePathError):
+        fsops._remove_verified_source(f, 8, f.stat().st_mtime_ns, link)
+    assert f.exists()
+
+
+@pytest.mark.parametrize("adopt", [False, True])
+@pytest.mark.parametrize("cross", [False, True])
+def test_move_tree_into_itself_refused(tmp_path, monkeypatch, adopt, cross):
+    if cross:
+        monkeypatch.setattr(winutil, "same_volume", lambda a, b: False)
+    d = tmp_path / "t"
+    f = w(d / "f.txt", b"precious")
+    for dst in (d, d / "sub", d / "sub" / "deeper", tmp_path):
+        with pytest.raises(UnsafePathError):
+            fsops.move_tree(d, dst, adopt_identical=adopt)
+    assert f.read_bytes() == b"precious"
+
+
+def test_partial_named_file_survives_cross_volume_move(tmp_path, cross_volume):
+    src = w(tmp_path / "s" / "a.txt", b"data")
+    (tmp_path / "d").mkdir()
+    pre = w(tmp_path / "d" / (fsops.PARTIAL_PREFIX + "a.txt"), b"not ours")
+    r = fsops.move_file(src, tmp_path / "d" / "a.txt")
+    assert r.dst.read_bytes() == b"data" and not src.exists()
+    assert pre.read_bytes() == b"not ours"

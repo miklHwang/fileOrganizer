@@ -76,7 +76,8 @@ def test_hidden_or_system(monkeypatch):
     monkeypatch.setattr(winutil, "is_windows", lambda: False)
     assert winutil.is_hidden_or_system(".x", 0)
     monkeypatch.setattr(winutil, "is_windows", lambda: True)
-    assert not winutil.is_hidden_or_system(".x", 0)
+    assert winutil.is_hidden_or_system(".x", 0)
+    assert not winutil.is_hidden_or_system("x", 0)
 
 
 def test_is_lock_error():

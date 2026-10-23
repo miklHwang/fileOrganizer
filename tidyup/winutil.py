@@ -82,7 +82,7 @@ def assert_local(path: str | os.PathLike, known_cloud_only: bool = False) -> Non
 def is_hidden_or_system(name: str, attrs: int) -> bool:
     if attrs & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM):
         return True
-    if not is_windows() and name.startswith("."):
+    if name.startswith("."):
         return True
     return False
 

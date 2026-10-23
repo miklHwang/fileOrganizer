@@ -97,8 +97,10 @@ def test_sections_and_content(tmp_path):
 def test_cloud_only_not_opened(tmp_path, open_spy):
     recs, rows = _scenario(tmp_path)
     report.build_report(_cfg(tmp_path), recs, rows)
-    assert not any("Screenshot cloud" in o for o in open_spy)
-    assert any("Screenshot 1.png" in o for o in open_spy)
+    # open_spy records norm_key() paths, which are lower-cased on Windows
+    opened = [o.lower() for o in open_spy]
+    assert not any("screenshot cloud" in o for o in opened)
+    assert any("screenshot 1.png" in o for o in opened)
 
 
 def test_escaping(tmp_path):

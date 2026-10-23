@@ -65,12 +65,11 @@ jobs:
         run: |
           $p = Start-Process -FilePath ".\dist\tidyup\tidyup.exe" -ArgumentList "--selftest" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "tidyup.exe --selftest failed ($($p.ExitCode))" }
-      - name: Zip the app
-        run: Compress-Archive -Path dist\tidyup -DestinationPath tidyup-windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: tidyup-windows
-          path: tidyup-windows.zip
+          path: dist
+          if-no-files-found: error
 
   release:
     needs: build
@@ -82,6 +81,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: tidyup-windows
+      - name: Zip the app
+        run: |
+          test -f tidyup/tidyup.exe || { echo "tidyup/tidyup.exe is missing from the artifact"; exit 1; }
+          zip -r -q tidyup-windows.zip tidyup
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}

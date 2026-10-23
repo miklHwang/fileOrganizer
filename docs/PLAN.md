@@ -10,7 +10,7 @@ Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
 Phase 5 (integration + docs): [x] P5-T1 [x] P5-T2 [x] P5-T3
 Phase 6 (follow-ups): [x] P6-T1
-Phase 7 (Windows app): [ ] P7-T1 | [ ] P7-T2 [ ] P7-T3 [ ] P7-T4
+Phase 7 (Windows app): [x] P7-T1 | [x] P7-T2 [x] P7-T3 [x] P7-T4
 
 27 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
@@ -1000,17 +1000,17 @@ Buttons (key, label, real argv after `--config <path>`, preview argv, confirm):
 Non-task buttons: "Settings (config.yaml)" (winutil.open_path(config)), "Open the plan in Excel" (manifest.csv, disabled until it exists), "Open the move list" (migrate_manifest.csv, after a migrate preview), "Open tidyup's data folder" (work_dir).
 GUI rules: one job at a time, with all action buttons disabled while it runs. Output goes to a read-only scrolling text pane via a queue polled with `after()`. Never touch widgets from the worker thread. "progress" lines replace a status line instead of flooding the pane. Errors are shown in red in the pane plus a short messagebox. After a preview that exits 0, ask with `askyesno` (default No); exit code != 0 → no confirmation and no real run. Before trial/apply, remind "Save and close manifest.csv in Excel first." Closing the window while a job runs asks first, and warns that an interrupted run can be undone or resumed. The window title is `tidyup <version>`. A header line shows the config path and says "Nothing is moved without asking you first."
 
-#### - [ ] P7-T1 App hooks in console, config and winutil
+#### - [x] P7-T1 App hooks in console, config and winutil
 - Owns: `tidyup/console.py`, `tidyup/config.py`, `tidyup/winutil.py`, `tests/test_console.py`, `tests/test_config.py`, `tests/test_winutil.py`. Reads: SPEC, PLAN, CLAUDE.md. Depends: Phase 6.
 - Acceptance: the P7-T1 interfaces above, exactly. Existing behaviour is unchanged when not frozen and no sink is set. `ensure_app_config` never overwrites. The frozen install dir is excluded from scans (test via monkeypatched `sys.frozen`/`sys.executable` + `scan.scan_sources` on the fake tree, with the app dir inside Downloads holding `tidyup.exe` and `_internal/x.dll` → no inventory rows under it). `open_path` stays the only `os.startfile` call.
 - Tests: sink receives every kind with the right prefixes; set_sink(None) restores printing; progress without tqdm when sink set or `sys.stderr` is None (monkeypatch) yields all items; ensure_app_config creates once, then leaves an edited file untouched (monkeypatch `Path.home`); find_default_config frozen vs not; frozen exclusion; open_path on non-Windows calls webbrowser (monkeypatched) and raises TidyupError on a missing path.
 
-#### - [ ] P7-T2 App controller and window
+#### - [x] P7-T2 App controller and window
 - Owns: `tidyup/app.py`, `tidyup/gui.py`, `tests/test_app.py`, `tests/test_gui.py`. Reads: P7-T1 files, `cli.py`, command modules. Depends: P7-T1.
 - Acceptance: the P7-T2 interfaces and the button table above, exactly. The GUI contains no file-mutating calls (it only calls `app.run_cli` and `winutil.open_path`), and no `print`. Static safety test stays green. The window is usable at 1024x700, and the text pane expands with resizing.
 - Tests (`test_app.py`, headless): build_tasks argv/preview/confirm for every key (including `--config` first and `--yes` only in real argv for trial/apply/upkeep/migrate); run_cli captures output through the sink and restores the previous sink even on exception; run_cli returns 2 for bad args without raising; end-to-end on the fake tree: preview argv of `trial` changes nothing (snapshot), real argv moves files, then `undo` argv restores the snapshot. `test_gui.py`: `pytest.importorskip("tkinter")`; skip on `TclError` (no display); `gui.main(["--selftest"]) == 0`.
 
-#### - [ ] P7-T3 Packaging and Windows build workflow
+#### - [x] P7-T3 Packaging and Windows build workflow
 - Owns: `packaging/tidyup.spec`, `packaging/tidyup_gui.py`, `packaging/tidyup_cli.py`, `packaging/smoke_config.yaml` (if needed), `requirements-build.txt`, `.github/workflows/build-exe.yml`, `.gitignore` (add `build/`, `dist/`). Reads: PLAN, `tidyup/`. Depends: the P7-T2 interface (`gui.main(["--selftest"])`), which is not yet built; code against it.
 - Acceptance:
   - `packaging/tidyup_gui.py`: `import sys; from tidyup import gui; raise SystemExit(gui.main(sys.argv[1:]))`. `packaging/tidyup_cli.py`: the same with `cli.main()`.
@@ -1024,7 +1024,7 @@ GUI rules: one job at a time, with all action buttons disabled while it runs. Ou
   - The existing `tests.yml` is untouched.
 - Tests: none in pytest (CI is the test). Locally, check the spec and workflow parse: `python -c "import ast; ast.parse(open('packaging/tidyup.spec').read())"` and YAML-load the workflow.
 
-#### - [ ] P7-T4 App docs
+#### - [x] P7-T4 App docs
 - Owns: `README.md`, `CLAUDE.md`. Reads: SPEC, PLAN (this phase). Depends: P7-T1 interfaces + the button table (code against them).
 - Acceptance:
   - README: a new first section "The easy way: the tidyup app", written for a non-programmer. It covers:

@@ -1,4 +1,5 @@
 # PyInstaller spec for tidyup (onedir). Build: pyinstaller packaging/tidyup.spec --noconfirm
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
@@ -6,7 +7,16 @@ from PyInstaller.utils.hooks import collect_submodules
 ROOT = Path(SPECPATH).resolve().parent  # noqa: F821 (SPECPATH is provided by PyInstaller)
 HERE = Path(SPECPATH).resolve()  # noqa: F821
 
-hidden = collect_submodules("tidyup")
+# collect_submodules imports the package in a subprocess; make sure it can be found.
+sys.path.insert(0, str(ROOT))
+hidden = sorted(
+    set(collect_submodules("tidyup"))
+    | {f"tidyup.{p.stem}" for p in (ROOT / "tidyup").glob("*.py") if p.stem != "__init__"}
+)
+_required = ("tidyup.scan", "tidyup.plan", "tidyup.report", "tidyup.apply", "tidyup.undo",
+             "tidyup.migrate", "tidyup.upkeep", "tidyup.gui", "tidyup.app")
+_missing = [m for m in _required if m not in hidden]
+assert not _missing, f"tidyup modules missing from the build (hiddenimports empty?): {_missing}"
 datas = [(str(ROOT / "tidyup" / "default_config.yaml"), "tidyup")]
 excludes = ["tests"]
 

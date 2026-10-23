@@ -419,9 +419,14 @@ Placeholders `{yyyy}`, `{mm}` (zero-padded) are filled by rules; `{home}`, `{doc
 ```python
 PROTECTED_NAMES = frozenset({"programdata", "appdata", "$recycle.bin", "system volume information"})
 PROTECTED_GLOBS = ("program files*",)
+TRUSTED_PREFIXES: tuple[Path, ...] = ()   # production default: empty (strict). Tests only (conftest autouse
+    # fixture monkeypatches it to (tmp_path_factory.getbasetemp(),)) because on windows-latest pytest temp dirs live
+    # under C:\Users\<u>\AppData\Local\Temp. Never set it from config, env vars or CLI.
 def is_protected(path: Path) -> bool
     # any path component (casefolded) in PROTECTED_NAMES or matching PROTECTED_GLOBS; or the first component
     # after the drive anchor is "windows" (C:\Windows); or is_within(path, %SystemRoot%) when that env var is set.
+    # If path is within a TRUSTED_PREFIXES entry, the PROTECTED_NAMES/GLOBS check applies only to the components
+    # BELOW that prefix (so <basetemp>/.../home/AppData/x is still protected); the Windows/SystemRoot checks always apply.
 def is_hidden_or_system(path: Path, attrs: int | None = None) -> bool
     # attrs None -> winutil.get_file_attributes(path) (0 on OSError); return winutil.is_hidden_or_system(path.name, attrs)
 def is_excluded(path: Path, cfg: Config) -> bool

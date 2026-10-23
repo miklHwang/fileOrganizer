@@ -13,6 +13,13 @@ CLOUD = 0x400000 | 0x1000
 HIDDEN = 0x2
 
 
+@pytest.fixture(autouse=True)
+def _trusted_tmp_prefix(monkeypatch, tmp_path_factory):
+    from tidyup import safety
+
+    monkeypatch.setattr(safety, "TRUSTED_PREFIXES", (tmp_path_factory.getbasetemp().resolve(),))
+
+
 @pytest.fixture
 def fake_tree(tmp_path) -> FakeTree:
     return build_fake_tree(tmp_path)

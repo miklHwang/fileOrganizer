@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -m tidyup scan:*)",
+      "Bash(.venv/Scripts/python.exe -m tidyup report:*)",
+      "Bash(.venv/Scripts/python.exe -m tidyup undo --list:*)",
+      "Bash(.venv/Scripts/python.exe -m tidyup --dry-run:*)",
+      "Bash(.venv/Scripts/python.exe -m tidyup --version)",
+      "Bash(.venv/Scripts/python.exe -m tidyup --help)"
+    ]
+  }
+}

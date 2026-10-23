@@ -1,0 +1,206 @@
+# =============================================================================
+# tidyup configuration
+# =============================================================================
+# This file controls how tidyup behaves. You can open it in Notepad.
+# Lines starting with "#" are comments (notes for you); tidyup ignores them.
+# Keep the indentation (the spaces at the start of lines) exactly as it is.
+# If you break something, tidyup will tell you which setting is wrong.
+# tidyup never deletes anything: "delete" always means "move to a review folder".
+
+# Version of this file format. Leave it at 1.
+version: 1
+
+# -----------------------------------------------------------------------------
+# folders: where your personal folders live.
+#   auto = let tidyup find them (it also notices if OneDrive has taken over
+#          Documents, Desktop or Pictures).
+#   or write a full path, for example:  documents: 'D:\My Documents'
+#   null = this folder does not exist / ignore it.
+# -----------------------------------------------------------------------------
+folders:
+  home: auto          # Your user folder, e.g. C:\Users\You
+  documents: auto     # Your Documents folder
+  desktop: auto       # Your Desktop folder
+  downloads: auto     # Your Downloads folder
+  pictures: auto      # Your Pictures folder
+  videos: auto        # Your Videos folder
+  onedrive: auto      # Your OneDrive folder (null if you do not use OneDrive)
+  screenshots: auto   # auto = the "Screenshots" folder inside Pictures
+
+# -----------------------------------------------------------------------------
+# sources: which folders tidyup should look through. Use the names from the
+# list above, or a full path. Folders that do not exist are skipped, and a
+# folder that sits inside another listed folder is only scanned once.
+# -----------------------------------------------------------------------------
+sources: [documents, desktop, downloads, pictures, videos, onedrive]
+
+# -----------------------------------------------------------------------------
+# destination: where organized files end up.
+#   root: null            = organize in place (inside your existing folders)
+#   root: 'D:\Organized'  = put everything under that folder instead
+# Use single quotes around Windows paths.
+# -----------------------------------------------------------------------------
+destination:
+  root: null
+
+# Folder where tidyup keeps its own files (inventory.csv, manifest.csv,
+# report.html and the undo logs). A relative name is relative to the folder
+# that contains this config file.
+work_dir: tidyup_data
+
+# -----------------------------------------------------------------------------
+# delete_mode: what "delete" means. tidyup never really deletes.
+#   review       = move the file to the _Review_Delete folder (you decide later)
+#   recycle_bin  = send it to the Windows Recycle Bin
+# -----------------------------------------------------------------------------
+delete_mode: review
+
+# -----------------------------------------------------------------------------
+# exclusions: things tidyup must leave completely alone.
+# -----------------------------------------------------------------------------
+exclusions:
+  # File names to ignore. * matches anything, ? matches one character.
+  # Capital letters do not matter.
+  names: ["desktop.ini", "thumbs.db", "~$*", "*.tmp", "*.crdownload", "*.part", "*.partial", "*.lnk", "*.url", "~tidyup-partial-*"]
+  # Full paths of folders or files to ignore, e.g. ['D:\Backups', 'C:\Users\You\Documents\Private']
+  paths: []
+
+# -----------------------------------------------------------------------------
+# atomic: folders that are moved as one whole unit and never reorganized
+# inside (for example a programming project or an app's own data).
+# -----------------------------------------------------------------------------
+atomic:
+  # If a folder contains a file or folder with one of these names, it is
+  # treated as one unit (for example a folder with a ".git" inside).
+  markers: [".git", "package.json", "*.sln", "*.csproj", "pyproject.toml", "node_modules", "venv", ".venv", "pyvenv.cfg"]
+  # Folders with these names are always treated as one unit.
+  folder_names: ["My Games", "Outlook Files", "OneNote Notebooks", "Zoom", "Visual Studio*", "Adobe",
+                 "Custom Office Templates", "WindowsPowerShell", "PowerShell", "IISExpress",
+                 "SQL Server Management Studio*", "Sound Recordings", "My Data Sources", "Fax", "Scanned Documents"]
+
+# -----------------------------------------------------------------------------
+# structure: the folder layout tidyup sorts files into.
+# {yyyy} is the four digit year and {mm} the two digit month.
+# The first part of each path must be one of: Documents, Pictures, Videos,
+# Installers, Archives, _Unsorted, _Duplicates, _Review_Delete.
+# -----------------------------------------------------------------------------
+structure:
+  categories_root: Documents                      # Documents go to Documents/<Category>
+  photos: "Pictures/Photos/{yyyy}/{yyyy}-{mm}"    # Photos by year and month
+  screenshots: Pictures/Screenshots_Review        # Screenshots to look over
+  videos: "Videos/{yyyy}"                         # Videos by year
+  installers: Installers                          # .exe and .msi files from Downloads
+  archives: Archives                              # Used only when rules > archives > keep_in_place is false
+  unsorted: _Unsorted                             # Anything that matches no rule (PDFs go to _Unsorted/PDFs)
+  duplicates: _Duplicates                         # Extra copies of identical files
+  review_delete: _Review_Delete                   # Files you may want to delete
+
+# -----------------------------------------------------------------------------
+# categories: document categories and the words that identify them.
+# tidyup reads the first pages of a PDF or Word file (or just the file name)
+# and picks the category whose words appear most. If two categories tie, the
+# one listed first wins. Capital letters do not matter. Add your own words!
+# -----------------------------------------------------------------------------
+categories:
+  Finance:  {keywords: [bank, statement, statement period, account number, balance, interest, credit card, investment, dividend, payroll, transaction]}
+  Receipts: {keywords: [receipt, invoice, order number, order confirmation, subtotal, amount paid, total paid, thank you for your purchase]}
+  School:   {keywords: [syllabus, course, semester, assignment, professor, lecture, grading, transcript, university, homework]}
+  Work:     {keywords: [agenda, meeting, project, action items, contract, employee, offer letter, timesheet, resume]}
+  Personal: {keywords: [passport, birth certificate, wedding, letter, personal, family, travel]}
+  Medical:  {keywords: [patient, diagnosis, prescription, doctor, clinic, hospital, lab results, medical, dental]}
+  Manuals:  {keywords: [manual, user guide, instructions, warranty, installation guide, quick start, safety information]}
+  Housing:  {keywords: [lease, rent, landlord, tenant, mortgage, property, utility bill, electricity, hoa]}
+  Taxes:    {keywords: [tax return, "w-2", "1099", irs, form 1040, tax year, hmrc, deduction, taxes]}
+  Other:    {keywords: []}                        # Catch-all category, no words needed
+
+# -----------------------------------------------------------------------------
+# naming: how renamed PDFs are called (".pdf" is added automatically).
+# Result looks like 2024-03-15_Receipts_Amazon-Order.pdf
+# -----------------------------------------------------------------------------
+naming:
+  pdf_pattern: "{date}_{category}_{description}"
+  date_format: "%Y-%m-%d"        # Year-month-day
+  description_max_len: 40        # Longest short description, in characters
+
+# -----------------------------------------------------------------------------
+# rules: fine tuning for each kind of file. Most people never need to change
+# anything below this line.
+# -----------------------------------------------------------------------------
+rules:
+  # Screenshot detection works by adding up points for each clue.
+  screenshot:
+    name_prefixes: ["screenshot", "screen shot", "capture", "snip"]   # File names that start like this look like screenshots
+    weights:                      # Points given for each clue (negative = evidence against)
+      name_prefix: 3              # Name starts with one of the prefixes above
+      in_screenshots_folder: 3    # File is in the Screenshots folder
+      png: 1                      # File is a PNG
+      no_camera_exif: 1           # No camera make/model stored in the picture
+      screen_resolution: 2        # Size exactly matches a screen size (list below)
+      phone_aspect: 1             # Shape matches a phone screen
+      has_camera_exif: -3         # Camera info found: probably a real photo
+    min_score: 3                  # Points needed to call it a screenshot
+    high_score: 5                 # Points needed to be confident about it
+    resolutions: ["1280x720","1280x800","1366x768","1440x900","1536x864","1600x900","1680x1050","1920x1080",
+                  "1920x1200","2256x1504","2560x1080","2560x1440","2560x1600","2736x1824","2880x1800","3024x1964",
+                  "3440x1440","3840x2160","750x1334","828x1792","1080x1920","1080x2340","1080x2400","1170x2532",
+                  "1179x2556","1242x2688","1284x2778","1290x2796","1440x3200"]   # Common screen sizes (width x height)
+    phone_aspect_ratios: [1.7778, 2.0, 2.1111, 2.1667, 2.2222]   # Long side divided by short side, portrait only
+    aspect_tolerance: 0.01        # How close the shape must be
+  photos:
+    extensions: [.jpg, .jpeg, .heic, .heif, .dng, .cr2, .nef, .arw, .tif, .tiff]   # File types treated as photos
+  videos:
+    extensions: [.mp4, .mov, .avi, .mkv, .wmv, .m4v, .3gp, .webm, .mts, .m2ts]    # File types treated as videos
+  installers:
+    extensions: [.exe, .msi]      # Installer file types
+    only_in: [downloads]          # Only sort installers found in these folders
+    review_delete_after_days: 90  # Installers older than this are suggested for review (never auto-approved)
+  archives:
+    keep_in_place: true           # Leave archive files (.zip, .7z, ...) in the folder they are in. Set to false to collect archives from Downloads into Downloads\Archives.
+    extensions: [.zip, .7z, .rar, .tar, .gz, .tgz, .bz2, .xz, .iso]   # Archive file types
+    only_in: [downloads]          # Only used when keep_in_place is false: collect archives found in these folders
+  pdf:
+    max_pages: 2                  # How many pages at the start of a PDF are read
+    high_min_hits: 2              # Keyword matches needed for a confident (high) result
+    date_order: MDY               # For dates like 03/04/2024: MDY = month first, DMY = day first
+  documents:
+    text_extensions: [.docx]      # Word files whose text is read
+    filename_only_extensions: [.doc, .xls, .xlsx, .ppt, .pptx, .txt, .rtf, .odt, .ods, .odp, .md, .csv, .pages, .numbers, .key, .epub]   # Sorted by file name only
+  duplicates:
+    min_size: 1                   # Ignore files smaller than this many bytes
+    location_priority: [documents, pictures, videos, onedrive, desktop, downloads]   # Which copy to keep: earlier = preferred
+  near_duplicates:
+    enabled: true                 # Look for look-alike photos (only listed in the report, never moved)
+    max_distance: 6               # How similar photos must be (lower = stricter)
+  version_chains:
+    # Patterns (regular expressions) for names like "report v3", "final_FINAL", "(1)", "copy of".
+    # Such files are listed as "likely old versions" and are never approved automatically.
+    patterns: ['^copy of\s+', '\s*-\s*copy(\s*\(\d+\))?$', '\s*[\(\[]\d+[\)\]]$',
+               '[\s_-]*v(er(sion)?)?[\s_.-]?\d+$', '([\s_-]*final)+$', '[\s_-]*(draft|old|new|rev\d*|updated)$']
+
+# -----------------------------------------------------------------------------
+# upkeep: the quick tidy you run yourself with "tidyup upkeep" (nothing runs
+# on its own). It only handles these folders and only these kinds of action,
+# and only the ones tidyup is highly confident about.
+# -----------------------------------------------------------------------------
+upkeep:
+  sources: [downloads, desktop, screenshots]
+  actions: [move, rename, move_rename]
+
+# -----------------------------------------------------------------------------
+# migrate: moving your organized folders to another drive (tidyup migrate).
+# -----------------------------------------------------------------------------
+migrate:
+  folders: [documents, pictures, videos, downloads, "{home}/_Unsorted", "{home}/_Duplicates", "{home}/_Review_Delete"]   # What to move
+  include_onedrive: false         # Also move the OneDrive folder? Usually no.
+  free_space_margin_mb: 1024      # Extra free space (in MB) required on the target drive
+
+# -----------------------------------------------------------------------------
+# report: settings for report.html.
+# -----------------------------------------------------------------------------
+report: {max_thumbnails: 400, thumbnail_px: 160}   # How many screenshot thumbnails, and how big
+
+# -----------------------------------------------------------------------------
+# csv: how manifest.csv and inventory.csv are written.
+# Use ";" instead of "," if your Excel expects semicolons (some European settings).
+# -----------------------------------------------------------------------------
+csv: {delimiter: ","}

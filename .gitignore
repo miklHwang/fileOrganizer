@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+tidyup_data/
+.pytest_cache/

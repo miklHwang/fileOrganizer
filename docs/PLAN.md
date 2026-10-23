@@ -10,8 +10,9 @@ Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
 Phase 5 (integration + docs): [x] P5-T1 [x] P5-T2 [x] P5-T3
 Phase 6 (follow-ups): [x] P6-T1
+Phase 7 (Windows app): [x] P7-T1 | [x] P7-T2 [x] P7-T3 [x] P7-T4
 
-23 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
+27 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
 ---
 
@@ -923,6 +924,122 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 - Acceptance: all of the above; full suite green; static safety test green.
 - Tests: archive in Downloads → skip/archive/high, not approved; archives in Desktop and Documents (e.g. `.zip`, `.tar.gz`/`.gz`, `.iso`) → skip/archive, not `_Unsorted`; uppercase `.ZIP` too; duplicate archive pair in two folders → both rows skip/archive, neither goes to `_Duplicates`, note names the other copy; `keep_in_place: false` → Downloads archive goes to `Downloads/Archives` as before and duplicate archives go to `_Duplicates`; upkeep leaves archives in Downloads and Desktop untouched; e2e: after a full apply every archive file in the fake tree is at its original path with identical bytes.
 
+### Phase 7 — Windows app (`tidyup.exe`), SPEC amendment 3
+
+Order: P7-T1 first (shared hooks). Then P7-T2, P7-T3 and P7-T4 run in parallel, coding against the interfaces below.
+
+Shape: a PyInstaller **onedir** build, zipped as `tidyup-windows.zip`. It holds a `tidyup\` folder containing `tidyup.exe` (windowed GUI), `tidyup-cli.exe` (console, same as `python -m tidyup`) and `_internal\`. The GUI uses tkinter (stdlib, so no new runtime dependency). It runs every action by calling `cli.main([...])` in a worker thread, so all existing argument handling, safety checks and friendly errors are reused. The GUI never moves files itself.
+
+Interfaces added in P7-T1 (exact):
+```python
+# tidyup/console.py
+Sink = Callable[[str, str], None]          # (kind, text); kind in {"info","success","warn","error","heading","table","progress"}
+def set_sink(sink: Sink | None) -> None    # None restores normal printing
+def get_sink() -> Sink | None
+# Every output function (info/success/warn/error/heading/table) sends its exact text, without the trailing
+# newline and with the same "OK: "/"WARNING: "/"Error: " prefixes, to the sink when one is set. Otherwise it prints as today.
+# progress(): if a sink is set OR sys.stderr is None (windowed exe), it does not use tqdm. It yields every item and
+# sends sink("progress", f"{desc}: {done}/{total or '?'}") at most every 0.25 s plus once at the end (nothing if no sink).
+# confirm(): unchanged (returns False when non-interactive). The GUI always passes --yes after its own dialog.
+
+# tidyup/config.py
+def is_frozen() -> bool                    # bool(getattr(sys, "frozen", False))
+def app_home() -> Path                     # Path.home() / "tidyup"
+def app_install_dir() -> Path | None       # Path(sys.executable).resolve().parent when frozen, else None
+def ensure_app_config() -> Path            # app_home()/config.yaml; if missing, create the folder and write
+                                           # default_config_text() with exclusive create ("x"). Never overwrite. Return the path.
+def find_default_config(cwd: Path | None = None) -> Path | None
+                                           # frozen: return ensure_app_config(); not frozen: unchanged (cwd/config.yaml or None)
+# load_config(): when app_install_dir() is not None, append it to exclusions["paths"], so the app's own files
+# (tidyup.exe, _internal\ ...) are never scanned or planned even if the user unzipped it into Downloads.
+
+# tidyup/winutil.py
+def open_path(path: str | os.PathLike) -> None   # Windows: os.startfile(path) (Explorer, Notepad, Excel, browser by file type);
+                                                  # elsewhere webbrowser.open(Path(path).as_uri()). Raises TidyupError if the path is missing.
+```
+
+Interfaces added in P7-T2 (exact; P7-T3 and P7-T4 rely on them):
+```python
+# tidyup/app.py  (no tkinter import; fully testable headless)
+@dataclass(frozen=True)
+class Task:
+    key: str                     # see table below
+    label: str                   # button text, exactly as in the table
+    argv: list[str]              # real run (always starts with "--config", str(config_path))
+    preview_argv: list[str] | None   # dry run shown before asking; None = read-only, no confirmation needed
+    confirm: str | None          # question shown after a successful preview
+
+def build_tasks(config_path: Path, *, migrate_to: Path | None = None) -> dict[str, Task]
+def run_cli(argv: Sequence[str], sink: console.Sink) -> int
+    # set console sink, call cli.main(list(argv)), always restore the previous sink; SystemExit -> its code (int, default 1);
+    # any other exception -> sink("error", plain message) and return 1. Never raises.
+def plan_exists(cfg: Config) -> bool         # cfg.manifest_path exists
+def work_paths(cfg: Config) -> dict[str, Path]   # {"config","work_dir","manifest","report","migrate_manifest"}
+
+# tidyup/gui.py   (tkinter)
+def main(argv: Sequence[str] | None = None) -> int
+    # "--selftest": build the window, root.update(), check every Task button exists, destroy, return 0 (CI smoke test).
+    # Otherwise: config path = config.find_default_config() (frozen) or ./config.yaml, creating it from the defaults if missing
+    # (via config.ensure_app_config when frozen); open the window; return 0 when it closes.
+```
+
+Buttons (key, label, real argv after `--config <path>`, preview argv, confirm):
+
+| key | label | argv | preview | confirmation |
+|---|---|---|---|---|
+| scan | 1. Scan my files | `scan` | none (read-only) | none |
+| plan | 2. Make a plan | `plan` | none | GUI asks first only if a manifest already exists: "This replaces your current plan, including any Y/N changes. Continue?" |
+| report | 3. Open the report | `report --open` | none | none |
+| trial | 4. Try it: 50 files from Downloads | `apply --only-folder downloads --limit 50 --yes` | `--dry-run apply --only-folder downloads --limit 50` | "Move these files now? You can undo this." |
+| undo | 5. Undo the last run | `undo` | `--dry-run undo` | "Put these files back where they were?" |
+| apply | 6. Do everything I approved | `apply --yes` | `--dry-run apply` | "Carry out all approved changes now? You can undo this." |
+| upkeep | Quick tidy (Downloads, Desktop, Screenshots) | `upkeep --yes` | `--dry-run upkeep` | "Tidy these files now? You can undo this." |
+| migrate | Move to another drive... | `migrate --to <dir> --yes` | `--dry-run migrate --to <dir>` | "Copy, check and move these folders to <dir> now?" (only built when migrate_to is given; the GUI asks for the folder with a folder picker first) |
+| runs | Show past runs | `undo --list` | none | none |
+
+Non-task buttons: "Settings (config.yaml)" (winutil.open_path(config)), "Open the plan in Excel" (manifest.csv, disabled until it exists), "Open the move list" (migrate_manifest.csv, after a migrate preview), "Open tidyup's data folder" (work_dir).
+GUI rules: one job at a time, with all action buttons disabled while it runs. Output goes to a read-only scrolling text pane via a queue polled with `after()`. Never touch widgets from the worker thread. "progress" lines replace a status line instead of flooding the pane. Errors are shown in red in the pane plus a short messagebox. After a preview that exits 0, ask with `askyesno` (default No); exit code != 0 → no confirmation and no real run. Before trial/apply, remind "Save and close manifest.csv in Excel first." Closing the window while a job runs asks first, and warns that an interrupted run can be undone or resumed. The window title is `tidyup <version>`. A header line shows the config path and says "Nothing is moved without asking you first."
+
+#### - [x] P7-T1 App hooks in console, config and winutil
+- Owns: `tidyup/console.py`, `tidyup/config.py`, `tidyup/winutil.py`, `tests/test_console.py`, `tests/test_config.py`, `tests/test_winutil.py`. Reads: SPEC, PLAN, CLAUDE.md. Depends: Phase 6.
+- Acceptance: the P7-T1 interfaces above, exactly. Existing behaviour is unchanged when not frozen and no sink is set. `ensure_app_config` never overwrites. The frozen install dir is excluded from scans (test via monkeypatched `sys.frozen`/`sys.executable` + `scan.scan_sources` on the fake tree, with the app dir inside Downloads holding `tidyup.exe` and `_internal/x.dll` → no inventory rows under it). `open_path` stays the only `os.startfile` call.
+- Tests: sink receives every kind with the right prefixes; set_sink(None) restores printing; progress without tqdm when sink set or `sys.stderr` is None (monkeypatch) yields all items; ensure_app_config creates once, then leaves an edited file untouched (monkeypatch `Path.home`); find_default_config frozen vs not; frozen exclusion; open_path on non-Windows calls webbrowser (monkeypatched) and raises TidyupError on a missing path.
+
+#### - [x] P7-T2 App controller and window
+- Owns: `tidyup/app.py`, `tidyup/gui.py`, `tests/test_app.py`, `tests/test_gui.py`. Reads: P7-T1 files, `cli.py`, command modules. Depends: P7-T1.
+- Acceptance: the P7-T2 interfaces and the button table above, exactly. The GUI contains no file-mutating calls (it only calls `app.run_cli` and `winutil.open_path`), and no `print`. Static safety test stays green. The window is usable at 1024x700, and the text pane expands with resizing.
+- Tests (`test_app.py`, headless): build_tasks argv/preview/confirm for every key (including `--config` first and `--yes` only in real argv for trial/apply/upkeep/migrate); run_cli captures output through the sink and restores the previous sink even on exception; run_cli returns 2 for bad args without raising; end-to-end on the fake tree: preview argv of `trial` changes nothing (snapshot), real argv moves files, then `undo` argv restores the snapshot. `test_gui.py`: `pytest.importorskip("tkinter")`; skip on `TclError` (no display); `gui.main(["--selftest"]) == 0`.
+
+#### - [x] P7-T3 Packaging and Windows build workflow
+- Owns: `packaging/tidyup.spec`, `packaging/tidyup_gui.py`, `packaging/tidyup_cli.py`, `packaging/smoke_config.yaml` (if needed), `requirements-build.txt`, `.github/workflows/build-exe.yml`, `.gitignore` (add `build/`, `dist/`). Reads: PLAN, `tidyup/`. Depends: the P7-T2 interface (`gui.main(["--selftest"])`), which is not yet built; code against it.
+- Acceptance:
+  - `packaging/tidyup_gui.py`: `import sys; from tidyup import gui; raise SystemExit(gui.main(sys.argv[1:]))`. `packaging/tidyup_cli.py`: the same with `cli.main()`.
+  - The spec makes two EXEs (`tidyup` with console=False, `tidyup-cli` with console=True) in one COLLECT named `tidyup` (onedir). It bundles `tidyup/default_config.yaml` as data under `tidyup`. It uses `collect_submodules("tidyup")` as hiddenimports, because cli imports command modules dynamically. It excludes `tests`. UPX is off.
+  - `requirements-build.txt` = `-r requirements.txt` plus a pinned `pyinstaller==6.11.1`.
+  - Workflow `build-exe` runs on push to `main`, pull_request, workflow_dispatch, and release `published`. It runs on `windows-latest` with Python 3.12:
+    - install, then run `pyinstaller packaging/tidyup.spec --noconfirm`
+    - smoke tests: `dist\tidyup\tidyup-cli.exe --version`; `tidyup-cli.exe --config <smoke config whose sources is a temp folder with a few files> --dry-run scan` exits 0; `Start-Process dist\tidyup\tidyup.exe -ArgumentList --selftest -Wait -PassThru` exits 0; and a check that `tidyup-cli.exe` never needed Python installed (it runs from `dist`)
+    - zip `dist\tidyup` as `tidyup-windows.zip`, then `actions/upload-artifact@v4` (name `tidyup-windows`)
+    - on a release event only, `gh release upload "$TAG" tidyup-windows.zip --clobber` with `GH_TOKEN: ${{ github.token }}` and `permissions: contents: write` on that job.
+  - The existing `tests.yml` is untouched.
+- Tests: none in pytest (CI is the test). Locally, check the spec and workflow parse: `python -c "import ast; ast.parse(open('packaging/tidyup.spec').read())"` and YAML-load the workflow.
+
+#### - [x] P7-T4 App docs
+- Owns: `README.md`, `CLAUDE.md`. Reads: SPEC, PLAN (this phase). Depends: P7-T1 interfaces + the button table (code against them).
+- Acceptance:
+  - README: a new first section "The easy way: the tidyup app", written for a non-programmer. It covers:
+    - download `tidyup-windows.zip` from the repository's Releases page (latest release) or, before any release exists, from the Actions tab → latest "build-exe" run → Artifacts (needs a GitHub login)
+    - Extract All (anywhere is fine; its own files are ignored), open the `tidyup` folder, double-click `tidyup.exe`
+    - the SmartScreen "Windows protected your PC" → "More info" → "Run anyway" (the app is not code-signed), and that antivirus may scan it the first time
+    - settings live in `C:\Users\<you>\tidyup\config.yaml` (the "Settings" button opens it), with work files next to it in `tidyup_data`
+    - the button walkthrough, mirroring section 3 step for step, with the exact labels from the table
+    - upkeep and migrate buttons; `tidyup-cli.exe` for typed commands
+    - updating (download the new zip and replace the folder; settings and undo logs are kept) and removing (delete the folder, optionally `C:\Users\<you>\tidyup`)
+    - for the repo owner: making a new download (GitHub → Releases → Draft a new release → new tag like `v1.0.0` → Publish release; the zip is attached automatically after about 10 minutes)
+  - Keep the Python route as "The other way: run it with Python". Fix the contents line and section numbers/anchors.
+  - CLAUDE.md: add `app.py`, `gui.py` and `packaging/` to the layout, the frozen config location, the app-dir exclusion, and the rule that the GUI only calls `app.run_cli`/`winutil.open_path`.
+- Tests: none.
+
 ---
 
 ## 5. Defaults chosen where the spec was silent
@@ -949,3 +1066,4 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 20. **Exit codes**: 0 ok, 1 error/refused, 2 bad arguments, 130 interrupted. Interactive confirmation before apply/migrate unless `--yes`; non-interactive without `--yes` is refused.
 21. **Symlinks and junctions** are never followed or moved; created timestamps on non-Windows use birth time if available, else min(ctime, mtime).
 22. **Archives stay in their folder** (user request, P6-T1): `.zip .7z .rar .tar .gz .tgz .bz2 .xz .iso` files are never moved, renamed or sent to `_Duplicates`; they are listed as `skip` rows (rule `archive`). `rules.archives.keep_in_place: false` restores collecting Downloads archives into `Downloads/Archives`.
+23. **Windows app** (SPEC amendment 3, Phase 7): a tkinter GUI plus a console exe, built as a PyInstaller onedir zip on windows-latest and attached to GitHub Releases. Settings in `%USERPROFILE%\tidyup\config.yaml`, created from the defaults on first launch. The app's own folder is never scanned. The app is unsigned, so SmartScreen shows a warning once.

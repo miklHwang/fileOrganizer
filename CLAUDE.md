@@ -28,8 +28,19 @@ Each CLI command module exposes `command(cfg, args) -> int`. `cli.py` dispatches
 | `apply.py`, `undo.py` | execute approved manifest rows with journaling; reverse a run |
 | `migrate.py` | move organized folders to another drive (copy -> verify -> remove), resumable |
 | `upkeep.py` | on-demand quick tidy of Downloads, Desktop and Screenshots |
+| `app.py` | headless app controller: `Task`, `build_tasks`, `run_cli(argv, sink)` (runs `cli.main` with a console sink), `plan_exists`, `work_paths`. No tkinter |
+| `gui.py` | tkinter window (`tidyup.exe`). Runs jobs in a worker thread via `app.run_cli`; `gui.main(["--selftest"])` is the CI smoke test |
+| `packaging/` | PyInstaller onedir spec (`tidyup.exe` windowed + `tidyup-cli.exe` console) and entry scripts. Built by `.github/workflows/build-exe.yml` on windows-latest, zipped as `tidyup-windows.zip`, attached to GitHub Releases |
 
 Work files (`inventory.csv`, `manifest.csv`, `report.html`, `logs/undo_<timestamp>.jsonl`) live in `tidyup_data\` next to `config.yaml`. They are always excluded from scans.
+
+## Windows app (SPEC amendment 3)
+
+- Frozen (PyInstaller) config: `config.find_default_config()` returns `config.ensure_app_config()`, i.e. `%USERPROFILE%\tidyup\config.yaml`, created from the defaults on first launch and never overwritten. Work files go in `tidyup_data\` next to it. Not frozen: `./config.yaml` as before.
+- App-dir exclusion: when frozen, `load_config` adds the install folder (`config.app_install_dir()`) to `exclusions["paths"]`, so `tidyup.exe` and `_internal\` are never scanned or planned, even if unzipped into Downloads.
+- The GUI only calls `app.run_cli` and `winutil.open_path`. It has no file-mutating calls and no `print`; every change still goes through `cli.main` (manifest, preview, confirmation, `--yes` only after the GUI's own dialog).
+- Console output reaches the GUI through `console.set_sink`. Do not add `print()` elsewhere.
+- The app is unsigned (SmartScreen warns once). Docs for users: README section 1.
 
 ## Target folder structure (defaults, editable in config)
 

@@ -9,8 +9,9 @@ Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (re
 Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
 Phase 5 (integration + docs): [x] P5-T1 [x] P5-T2 [x] P5-T3
+Phase 6 (follow-ups): [ ] P6-T1
 
-22 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
+23 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
 
 ---
 
@@ -394,7 +395,7 @@ rules:
   videos:
     extensions: [.mp4, .mov, .avi, .mkv, .wmv, .m4v, .3gp, .webm, .mts, .m2ts]
   installers: {extensions: [.exe, .msi], only_in: [downloads], review_delete_after_days: 90}
-  archives:   {extensions: [.zip, .7z, .rar], only_in: [downloads]}
+  archives:   {keep_in_place: true, extensions: [.zip, .7z, .rar, .tar, .gz, .tgz, .bz2, .xz, .iso], only_in: [downloads]}   # P6-T1
   pdf:        {max_pages: 2, high_min_hits: 2, date_order: MDY}
   documents:
     text_extensions: [.docx]
@@ -571,7 +572,7 @@ def is_in_target_structure(path: Path, cfg: Config) -> bool
 ```
 Classification order inside `classify` (first match wins):
 1. **Installer** (ext in `rules.installers.extensions`, path within any `only_in` folder): age = `now - modified` > `review_delete_after_days` → kind `review_delete`, logical `_Review_Delete`, rule `installer_old`, confidence low; else kind file, `Installers`, rule `installer`, high.
-2. **Archive** (same pattern) → `Archives`, rule `archive`, high.
+2. **Archive** (P6-T1). `rules.archives.keep_in_place: true` (default): ext in `rules.archives.extensions`, in ANY folder (`only_in` ignored) → kind `skip`, logical None, rule `archive`, high, note `"archive: kept in its folder"`. `keep_in_place: false`: the old behaviour (ext in extensions and within an `only_in` folder → `Archives`, rule `archive`, high; elsewhere falls through to the later rules). Helper: `def is_kept_archive(record: FileRecord, cfg: Config) -> bool` (keep_in_place on and ext matches, case-insensitive).
 3. **Screenshot**: ext in `models.TYPE_GROUPS["Images"]` and `screenshot_score >= min_score` → `Pictures/Screenshots_Review`, rule `screenshot`, high if score ≥ `high_score` else medium; notes = `"screenshot score N: " + ", ".join(reasons)`. Signals: name starts with a prefix (casefold) +3; within `folders.screenshots` +3; `.png` +1; image readable and no camera make/model +1 (not counted for cloud-only); exact `WxH` (either orientation) in `resolutions` +2; else portrait and long/short within tolerance of a phone ratio +1; camera make/model present −3.
 4. **Photo**: ext in `rules.photos.extensions`, or any image with camera make/model → `Pictures/Photos/{yyyy}/{yyyy}-{mm}` from `photo_date`: exif → high, filename → high, modified → medium; rule `photo`; note `"date from <source>"`.
 5. **Video**: ext in `rules.videos.extensions` → `Videos/{yyyy}`; filename date → high, modified → medium; rule `video`.
@@ -906,16 +907,32 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 - Acceptance: for future Claude sessions: package/folder structure and module responsibilities, target folder structure, naming conventions (`YYYY-MM-DD_Category_Short-Description.pdf`, " (n)" collisions, rule names), rule summary and confidence table, hard safety rules + where each is enforced (§2), mockability conventions (§0), how to run tests, "never add a delete path outside fsops".
 - Tests: none.
 
+### Phase 6 — Follow-ups requested by the user
+
+#### - [ ] P6-T1 Keep archives in their folder
+- Why: the user asked that archives stay in the folder they are in, because many belong with that folder (SPEC amendment 2).
+- Owns: `tidyup/rules.py`, `tidyup/plan.py`, `tidyup/default_config.yaml`, `config.yaml` (byte-identical copy), `tidyup/config.py` (only if validation of the new key needs it), the tests that touch archives (`tests/test_rules.py`, `tests/test_plan.py`, `tests/test_upkeep.py`, `tests/test_e2e.py`, `tests/test_config.py`, `tests/test_report.py` as needed; `tests/fixtures/fake_tree.py` may gain fixture files), `README.md`, `CLAUDE.md`. Reads: SPEC, PLAN, `tidyup/dupes.py`, `tidyup/upkeep.py`, `tidyup/report.py`, `tidyup/models.py`.
+- Behaviour with `keep_in_place: true` (default):
+  - `rules.classify` per §1.3 Archive step: every archive file anywhere becomes a `skip` row, rule `archive`, confidence high, approved N (skip rows are never approved), note `archive: kept in its folder`. Applies in every source folder (Downloads, Desktop, Documents, Pictures, Videos, OneDrive) and with a destination root set.
+  - `plan.build_manifest`: an archive that is a non-keeper in an exact-duplicate group is NOT moved to `_Duplicates`. It is a `skip` row, rule `archive`, with the notes `archive: kept in its folder` and `same content as <keeper path>`. (A non-archive whose keeper is an archive still follows the duplicate rule.) Duplicate groups in the report may still list archives; that is informational.
+  - Archives never get `_Unsorted/Archives` either. Default `extensions` widen to the whole archive type group: `.zip .7z .rar .tar .gz .tgz .bz2 .xz .iso`.
+  - Upkeep and apply never move archives (they only run move/rename rows).
+- With `keep_in_place: false`: exactly the previous behaviour (Downloads archives → `Downloads/Archives`, others to their normal rules, duplicates moved).
+- Config: add `keep_in_place: true` under `rules: archives:` with a plain-English comment ("Leave archive files (.zip, .7z, ...) in the folder they are in. Set to false to collect archives from Downloads into Downloads\Archives."). Update the `structure: archives:` comment to say it is used only when `keep_in_place` is false. `config.yaml` stays byte-identical to `tidyup/default_config.yaml`.
+- Docs: README (walkthrough step 5 no longer promises an `Archives` folder; Defaults items 1, 4, 6 and a new default saying archives stay where they are; upkeep description), CLAUDE.md (target structure line, rule table `installer / archive` row split so archive says "left in its folder (skip); `keep_in_place: false` → Downloads/Archives").
+- Acceptance: all of the above; full suite green; static safety test green.
+- Tests: archive in Downloads → skip/archive/high, not approved; archives in Desktop and Documents (e.g. `.zip`, `.tar.gz`/`.gz`, `.iso`) → skip/archive, not `_Unsorted`; uppercase `.ZIP` too; duplicate archive pair in two folders → both rows skip/archive, neither goes to `_Duplicates`, note names the other copy; `keep_in_place: false` → Downloads archive goes to `Downloads/Archives` as before and duplicate archives go to `_Duplicates`; upkeep leaves archives in Downloads and Desktop untouched; e2e: after a full apply every archive file in the fake tree is at its original path with identical bytes.
+
 ---
 
 ## 5. Defaults chosen where the spec was silent
 
-1. **In-place layout**: `Documents/<Category>` → the real Documents folder; `Pictures/...`, `Videos/...` → real Pictures/Videos; `Installers`, `Archives` → inside Downloads; `_Unsorted`, `_Duplicates`, `_Review_Delete` → user profile folder (e.g. `C:\Users\me\_Unsorted`). Files already in OneDrive stay in OneDrive (mirrored structure under the OneDrive root).
+1. **In-place layout**: `Documents/<Category>` → the real Documents folder; `Pictures/...`, `Videos/...` → real Pictures/Videos; `Installers` (and `Archives` only when `rules.archives.keep_in_place: false`) → inside Downloads; `_Unsorted`, `_Duplicates`, `_Review_Delete` → user profile folder (e.g. `C:\Users\me\_Unsorted`). Files already in OneDrive stay in OneDrive (mirrored structure under the OneDrive root).
 2. **Work files** (`inventory.csv`, `manifest.csv`, `report.html`, `logs/`) in `tidyup_data\` next to `config.yaml`; always excluded from scans.
 3. **Atomic folders** are inventoried as one row (no inner files) and left in place when organizing in place; with a destination root they move whole (medium confidence, approved N). Source roots themselves are never atomic. Extra markers: `.venv`, `pyvenv.cfg`; extra app folders listed in the schema.
-4. **Confidence**: photos EXIF or filename date → high, modified date → medium; videos filename date → high, else medium; installers/archives in Downloads → high; old installers → review_delete low; exact duplicates → high (approved Y); documents moved (never renamed) — docx with strong text match high, filename match medium; screenshots high at score ≥ 5, medium at 3–4.
+4. **Confidence**: photos EXIF or filename date → high, modified date → medium; videos filename date → high, else medium; installers in Downloads → high; old installers → review_delete low; exact duplicates → high (approved Y); documents moved (never renamed) — docx with strong text match high, filename match medium; screenshots high at score ≥ 5, medium at 3–4.
 5. **Scanned PDFs** with a filename keyword go to `Documents/<Category>` with their original name (medium); otherwise `_Unsorted/PDFs`.
-6. **Unsorted** is split by type group: `_Unsorted/{Images,Videos,Audio,PDFs,Documents,Installers,Archives,Other}`.
+6. **Unsorted** is split by type group: `_Unsorted/{Images,Videos,Audio,PDFs,Documents,Installers,Other}` (archives are kept in place, see 22).
 7. **Files already in the target structure** are left alone unless a high-confidence rule applies (`already_filed`).
 8. **Version chains**: only older members are forced approved=N; the newest keeps its normal default.
 9. **Exact-duplicate keeper**: location priority Documents > Pictures > Videos > OneDrive > Desktop > Downloads, then clean name, then oldest created, then shortest path. Empty files are never treated as duplicates.
@@ -931,3 +948,4 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 19. **`--dry-run`**: scan/plan/report compute and print but write nothing; apply/undo/upkeep print planned operations; migrate's dry run writes only `migrate_manifest.csv`.
 20. **Exit codes**: 0 ok, 1 error/refused, 2 bad arguments, 130 interrupted. Interactive confirmation before apply/migrate unless `--yes`; non-interactive without `--yes` is refused.
 21. **Symlinks and junctions** are never followed or moved; created timestamps on non-Windows use birth time if available, else min(ctime, mtime).
+22. **Archives stay in their folder** (user request, P6-T1): `.zip .7z .rar .tar .gz .tgz .bz2 .xz .iso` files are never moved, renamed or sent to `_Duplicates`; they are listed as `skip` rows (rule `archive`). `rules.archives.keep_in_place: false` restores collecting Downloads archives into `Downloads/Archives`.

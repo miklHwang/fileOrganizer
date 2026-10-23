@@ -1,5 +1,7 @@
 AMENDMENT (2026-10-23, at the user's request): tidyup runs on an as-needed basis only. There is no scheduled/daily task; the `schedule` command is dropped and upkeep is an on-demand command the user runs when they want.
 
+AMENDMENT 2 (2026-10-23, at the user's request): archives (.zip, .7z, .rar, and similar) stay in the folder they are in, because many belong with that folder. They are not moved to Archives/, _Unsorted or _Duplicates. A config switch (`rules: archives: keep_in_place: false`) restores collecting Downloads archives into Archives/.
+
 Build "tidyup", a Python command-line file organizer for my Windows 10/11 PC. I'll clone this repo and run it locally. The build happens in a Linux cloud environment, so all Windows-specific code must sit behind small functions that tests can mock. Builders make sensible defaults rather than stopping to ask, and note them in the README.
 
 GOALS

@@ -165,3 +165,76 @@ def test_open_spy_records_image_and_pdf(open_spy, fake_tree):
     PdfReader(str(pdf))
     assert winutil.norm_key(str(img)) in open_spy
     assert winutil.norm_key(str(pdf)) in open_spy
+
+
+def test_open_spy_pdfreader_stays_a_class(open_spy, fake_tree):
+    import pypdf
+    from tidyup import winutil
+
+    pdf = fake_tree.files["invoice_pdf"]
+    r = pypdf.PdfReader(str(pdf))
+    assert isinstance(r, pypdf.PdfReader)
+    assert isinstance(pypdf.PdfReader, type)
+    assert winutil.norm_key(str(pdf)) in open_spy
+
+
+def test_open_spy_pdfreader_subclass(open_spy, fake_tree):
+    import pypdf
+    from tidyup import winutil
+
+    class Sub(pypdf.PdfReader):
+        pass
+
+    class Sub2(pypdf.PdfReader):
+        def __init__(self, path):
+            super().__init__(path)
+
+    p1, p2 = fake_tree.files["invoice_pdf"], fake_tree.files["statement_pdf"]
+    assert isinstance(Sub(str(p1)), pypdf.PdfReader)
+    assert isinstance(Sub2(str(p2)), pypdf.PdfReader)
+    assert winutil.norm_key(str(p1)) in open_spy
+    assert winutil.norm_key(str(p2)) in open_spy
+
+
+def test_open_spy_pdfreader_bound_before_fixture(request, fake_tree):
+    from pypdf import PdfReader  # bound before open_spy is active
+    from tidyup import winutil
+
+    request.getfixturevalue("open_spy")
+    opened = request.getfixturevalue("open_spy")
+    pdf = fake_tree.files["syllabus_pdf"]
+    PdfReader(str(pdf))
+    assert winutil.norm_key(str(pdf)) in opened
+
+
+def test_open_spy_pdfreader_file_object_records_name(open_spy, fake_tree):
+    import pypdf
+    from tidyup import winutil
+
+    pdf = fake_tree.files["invoice_pdf"]
+    with open(pdf, "rb") as fh:
+        pypdf.PdfReader(fh)
+    assert winutil.norm_key(str(pdf)) in open_spy
+
+
+def test_open_spy_docx_document(open_spy, fake_tree):
+    import inspect
+
+    import docx
+    from tidyup import winutil
+
+    path = fake_tree.files["agenda_docx"]
+    d = docx.Document(str(path))
+    if inspect.isclass(docx.Document):
+        assert isinstance(d, docx.Document)
+    assert d.paragraphs
+    assert winutil.norm_key(str(path)) in open_spy
+
+
+def test_open_spy_pil_open_recorded(open_spy, fake_tree):
+    from tidyup import winutil
+
+    img = fake_tree.files["photo_exif"]
+    with Image.open(img) as im:
+        assert im.size
+    assert winutil.norm_key(str(img)) in open_spy

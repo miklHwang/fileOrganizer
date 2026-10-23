@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import builtins
 import functools
+import inspect
 import io
 import os
 
@@ -66,25 +67,52 @@ def open_spy(monkeypatch) -> list[str]:
     opened: list[str] = []
 
     def record(target) -> None:
-        if isinstance(target, int) or hasattr(target, "read"):
+        if isinstance(target, int):
             return
+        if hasattr(target, "read"):
+            target = getattr(target, "name", None)
+            if not isinstance(target, (str, bytes, os.PathLike)):
+                return
         try:
             opened.append(winutil.norm_key(os.fsdecode(target)))
         except Exception:
             pass
 
+    def record_args(a, kw) -> None:
+        if a:
+            record(a[0])
+        else:
+            for k in ("file", "fp", "stream", "path", "docx"):
+                if k in kw:
+                    record(kw[k])
+                    break
+
     def wrap(orig):
         @functools.wraps(orig, updated=())
         def inner(*a, **kw):
-            if a:
-                record(a[0])
-            else:
-                for k in ("file", "fp", "stream", "path", "docx"):
-                    if k in kw:
-                        record(kw[k])
-                        break
+            record_args(a, kw)
             return orig(*a, **kw)
         return inner
+
+    def spy_class(monkeypatch_, cls) -> None:
+        # Never replace a class with a function (breaks isinstance/subclassing).
+        # Patching __init__ on the class object also covers references bound
+        # earlier via ``from pypdf import PdfReader``.
+        orig_init = cls.__init__
+
+        @functools.wraps(orig_init)
+        def spy_init(self, *a, **kw):
+            record_args(a, kw)
+            return orig_init(self, *a, **kw)
+
+        monkeypatch_.setattr(cls, "__init__", spy_init)
+
+    def spy(module, name) -> None:
+        obj = getattr(module, name)
+        if inspect.isclass(obj):
+            spy_class(monkeypatch, obj)
+        else:
+            monkeypatch.setattr(module, name, wrap(obj))
 
     monkeypatch.setattr(builtins, "open", wrap(builtins.open))
     monkeypatch.setattr(io, "open", wrap(io.open))
@@ -93,7 +121,7 @@ def open_spy(monkeypatch) -> list[str]:
     import docx
     import pypdf
 
-    monkeypatch.setattr(PIL.Image, "open", wrap(PIL.Image.open))
-    monkeypatch.setattr(pypdf, "PdfReader", wrap(pypdf.PdfReader))
-    monkeypatch.setattr(docx, "Document", wrap(docx.Document))
+    spy(PIL.Image, "open")
+    spy(pypdf, "PdfReader")
+    spy(docx, "Document")
     return opened

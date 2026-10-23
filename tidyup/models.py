@@ -9,6 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Iterable
 
+from tidyup import winutil
 from tidyup.errors import ManifestError, TidyupError
 
 
@@ -137,9 +138,9 @@ def _opt(v: object) -> str:
 
 def _write_csv(path: Path, columns: list[str], rows: Iterable[list[str]], delimiter: str) -> int:
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    Path(winutil.long_path(path.parent)).mkdir(parents=True, exist_ok=True)
     n = 0
-    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
+    with open(winutil.long_path(path), "w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
         w.writerow(columns)
         for r in rows:
@@ -159,7 +160,7 @@ def write_inventory(path: Path, records: Iterable[FileRecord], delimiter: str = 
 
 
 def _read_text(path: Path) -> str:
-    data = Path(path).read_bytes()
+    data = Path(winutil.long_path(path)).read_bytes()
     try:
         return data.decode("utf-8-sig")
     except UnicodeDecodeError:

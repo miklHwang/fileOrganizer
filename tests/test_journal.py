@@ -36,7 +36,7 @@ def test_create_write_finish_read(tmp_path):
     assert run.finished and run.kind == "apply" and run.run_id == j.run_id and run.undone_by is None
     assert [e["type"] for e in run.entries] == ["mkdir", "move", "trash", "skip", "error", "run_end"]
     assert [o["seq"] for o in run.ops] == [1, 2, 3]
-    assert run.entries[1]["dst"] == "/b/1"
+    assert run.entries[1]["dst"] == str(Path("/b/1"))
 
 
 def test_fsync_called_per_line(tmp_path, monkeypatch):
@@ -125,3 +125,18 @@ def test_unicode_and_prefix_stripped(tmp_path):
     run = journal.read_run(j.path)
     assert run.ops[0]["src"] == "C:\\日本\\é.txt"
     assert run.ops[0]["row_id"] is None
+
+
+def test_unicode_line_separators_do_not_split_lines(tmp_path):
+    j = _mk(tmp_path)
+    j.move(src=Path("/a/x\u2028y\u2029z\u0085.txt"), dst=Path("/b/1"), row_id="1", action="move",
+           is_dir=False, cross_volume=False, size=1, sha256=None)
+    _move(j, 2)
+    j.close()
+    run = journal.read_run(j.path)
+    assert len(run.ops) == 2
+    assert run.ops[0]["src"] == str(Path("/a/x\u2028y\u2029z\u0085.txt"))
+    # also robust against a log written with raw separators
+    raw = j.path.read_text(encoding="utf-8").replace("\\u2028", "\u2028")
+    j.path.write_text(raw, encoding="utf-8", newline="\n")
+    assert len(journal.read_run(j.path).ops) == 2

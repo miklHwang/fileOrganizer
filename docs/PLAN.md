@@ -4,7 +4,7 @@ Source of truth for requirements: `docs/SPEC.md`. This file is the source of tru
 
 ## Progress
 
-Phase 1 (foundation): [ ] P1-T1 [ ] P1-T2 [ ] P1-T3 [ ] P1-T4 [ ] P1-T5 [ ] P1-T6
+Phase 1 (foundation): [x] P1-T1 [x] P1-T2 [x] P1-T3 [x] P1-T4 [x] P1-T5 [x] P1-T6
 Phase 2 (building blocks): [ ] P2-T1 [ ] P2-T2 [ ] P2-T3 [ ] P2-T4 ~~P2-T5~~ (removed) [ ] P2-T6
 Phase 3 (commands): [ ] P3-T1 [ ] P3-T2 [ ] P3-T3 [ ] P3-T4 [ ] P3-T5 [ ] P3-T6
 Phase 4 (planning + upkeep): [ ] P4-T1 [ ] P4-T2
@@ -784,34 +784,34 @@ Format: owns = files the task creates/modifies (exclusive within its phase). Rea
 ### Phase 1 — Foundation
 Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
-#### - [ ] P1-T1 Package skeleton, tooling, errors, console
+#### - [x] P1-T1 Package skeleton, tooling, errors, console
 - Goal: importable package and all module stubs so later tasks fill modules in parallel.
 - Owns: `requirements.txt`, `requirements-dev.txt`, `pyproject.toml`, `.gitignore`, `tidyup/__init__.py`, `tidyup/__main__.py`, `tidyup/errors.py`, `tidyup/console.py`, stubs `tidyup/{cli,scan,extract,rules,dupes,plan,fsops,apply,undo,migrate,report,upkeep}.py`, `tests/test_console.py`, `tests/test_skeleton.py`.
 - Reads: SPEC, PLAN. Depends: none.
 - Acceptance: stubs carry the exact §1.3 signatures/dataclasses (`raise NotImplementedError`), import Phase-1 types only under `TYPE_CHECKING`, every module imports cleanly; cli stub `main()` supports `--version` only; `python -m tidyup --version` prints `tidyup 0.1.0`; console functions per §1.3.
 - Tests: import every `tidyup.*` module; `python -m tidyup --version` via subprocess; `human_size` table; `confirm` with assume_yes / non-TTY; `progress` yields all items.
 
-#### - [ ] P1-T2 Windows helper layer (parallel)
+#### - [x] P1-T2 Windows helper layer (parallel)
 - Owns: `tidyup/winutil.py`, `tests/test_winutil.py`. Reads: errors.py. Depends: P1-T1.
 - Acceptance: §1.3 winutil exactly; no other module needed; works on Linux and Windows.
 - Tests: `long_path` formats with `is_windows` mocked True/False (drive, UNC, already-prefixed, short); `strip_long_path` round trip; cloud-only mask for each of the 3 bits; `assert_local` raises/doesn't; `is_hidden_or_system`; `is_lock_error` for PermissionError, winerror 32, EBUSY; `is_within`/`norm_key`; `same_volume` same dir True; `free_space` > 0; `known_folders` keys (non-Windows path; Windows branch with a fake `winreg` module injected); `onedrive_root` via env; `file_times` returns datetimes.
 
-#### - [ ] P1-T3 Data models, CSV I/O, undo journal (parallel)
+#### - [x] P1-T3 Data models, CSV I/O, undo journal (parallel)
 - Owns: `tidyup/models.py`, `tidyup/journal.py`, `tests/test_models.py`, `tests/test_journal.py`. Reads: errors.py. Depends: P1-T1.
 - Acceptance: §1.3 models + journal exactly; CSV opens in Excel (BOM, header); journal lines fsync'd.
 - Tests: inventory and manifest round trip (all fields, None, unicode paths, commas/quotes in names); `read_manifest_excel_variants` (semicolon delimiter, cp1252, `yes`/`x`/`1`, blank lines, reordered/upper-case headers); invalid action → ManifestError with row number; `type_group`; journal create/write/finish/read; truncated last line tolerated; `new_run_id` uniqueness; `find_run` latest-not-undone and kind filter; `mark_undone`; `resume` continues seq.
 
-#### - [ ] P1-T4 Config loader + default config
+#### - [x] P1-T4 Config loader + default config
 - Owns: `tidyup/config.py`, `tidyup/default_config.yaml`, `config.yaml`, `tests/test_config.py`. Reads: winutil.py, errors.py, console.py. Depends: P1-T1, P1-T2.
 - Acceptance: §1.3 config + schema; every key commented in plain English (aimed at a non-programmer); `config.yaml` byte-identical to `tidyup/default_config.yaml`.
 - Tests: defaults load with `known_folders` mocked; file + overrides deep-merge; unknown key / bad delete_mode / bad YAML (line number) → ConfigError; `work_dir` relative to config dir; KFM de-dup (documents inside onedrive → one source, label onedrive); missing source dropped with warning; `resolve_destination` in place, with dest_root, `test_resolve_destination_onedrive_guard`; `folder_containing` most specific; `with_sources`; repo `config.yaml` identical to packaged default.
 
-#### - [ ] P1-T5 Fake file tree generator + shared fixtures (parallel)
+#### - [x] P1-T5 Fake file tree generator + shared fixtures (parallel)
 - Owns: `tests/conftest.py`, `tests/fixtures/__init__.py`, `tests/fixtures/fake_tree.py`, `tests/test_fake_tree.py`. Reads: §3. Depends: P1-T1.
 - Acceptance: §3 exactly (handles, layout, contents, mtimes); uses Pillow and reportlab; no `tidyup` import at module level; builds in < 5 s.
 - Tests: every handle exists; PNG dimensions; EXIF Make/DateTimeOriginal readable with Pillow; invoice PDF text extractable with pypdf and scanned PDF has none; duplicate groups byte-identical; long path > 260 chars; `snapshot` stable across two calls and detects a one-byte change, a rename and an mtime change.
 
-#### - [ ] P1-T6 Safety layer + static safety test
+#### - [x] P1-T6 Safety layer + static safety test
 - Owns: `tidyup/safety.py`, `tests/test_safety.py`, `tests/test_static_safety.py`. Reads: config.py, winutil.py, errors.py. Depends: P1-T2, P1-T4.
 - Acceptance: §1.3 safety exactly; static test implements the §2 allowlist via `ast` and passes on the current tree (stubs included).
 - Tests: `is_protected` for `C:\Windows\x`, `C:\Program Files (x86)\a`, `...\AppData\...`, `$Recycle.Bin`, `System Volume Information`, `ProgramData`, and negatives (`Documents\Windows notes.txt`); hidden via dot and via mocked attrs; exclusions names/paths/work_dir/partial prefix; atomic markers (`.git`, `*.sln`, `venv`) and folder names (`Visual Studio 2022`); `find_atomic_ancestor` stops at source root; `check_source`/`check_destination` raise UnsafePathError; static test catches a synthetic offending snippet (parse a string) and passes the real package.

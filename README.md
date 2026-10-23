@@ -4,22 +4,80 @@ tidyup sorts the files in your Documents, Desktop, Downloads, Pictures, Videos a
 
 You run it yourself, when you want. **There is no scheduled or background task.**
 
-Contents: [Install](#1-install) | [Settings](#2-edit-configyaml) | [First run](#3-first-run-walkthrough) | [Moving to D:](#4-moving-your-files-to-the-d-drive) | [Upkeep](#5-quick-tidy-with-tidyup-upkeep) | [Commands](#6-command-reference) | [Safety](#7-safety-what-tidyup-will-never-do) | [Defaults](#8-defaults-we-chose) | [Troubleshooting](#9-troubleshooting) | [Claude Code](#10-let-claude-code-run-it-for-you)
+Contents: [The app](#1-the-easy-way-the-tidyup-app) | [Python route](#2-the-other-way-run-it-with-python) | [Settings](#3-edit-configyaml) | [First run](#4-first-run-walkthrough) | [Moving to D:](#5-moving-your-files-to-the-d-drive) | [Upkeep](#6-quick-tidy-with-tidyup-upkeep) | [Commands](#7-command-reference) | [Safety](#8-safety-what-tidyup-will-never-do) | [Defaults](#9-defaults-we-chose) | [Troubleshooting](#10-troubleshooting) | [Claude Code](#11-let-claude-code-run-it-for-you)
 
 ---
 
-## 1. Install
+## 1. The easy way: the tidyup app
+
+This is the simplest route. You download one zip, open the app and click buttons. You do not need Python. The app is new; if it will not start on your PC, use [the Python route](#2-the-other-way-run-it-with-python) instead.
+
+### 1.1 Download it
+
+1. Open <https://github.com/miklHwang/fileOrganizer/releases/latest>.
+2. Under **Assets**, click `tidyup-windows.zip`.
+
+No release there yet? Go to the **Actions** tab of the project on GitHub, click the newest **build-exe** run, and download `tidyup-windows` under **Artifacts** (you need to be logged in to GitHub).
+
+### 1.2 Open it
+
+1. Right-click the zip and choose **Extract All**. Any folder is fine; tidyup ignores its own files.
+2. Open the extracted `tidyup` folder and double-click **`tidyup.exe`**.
+3. Windows may show **"Windows protected your PC"**. The app is not code-signed, so this is expected. Click **More info**, then **Run anyway**. Your antivirus may also scan it the first time, which can take a moment.
+
+### 1.3 Where things are kept
+
+- Settings: `C:\Users\<you>\tidyup\config.yaml`. The **Settings (config.yaml)** button opens it in Notepad. See [Settings](#3-edit-configyaml) for what you can change.
+- Work files (the plan, the report, undo logs): in the `tidyup_data` folder next to `config.yaml`. The **Open tidyup's data folder** button opens it.
+
+### 1.4 The buttons, step by step
+
+This is the same walkthrough as [First run](#4-first-run-walkthrough). Work from the top. Nothing is moved without asking you first, and the window shows what it is doing as it goes.
+
+1. **1. Scan my files** - reads your folders and lists them. Changes nothing.
+2. **2. Make a plan** - decides where each file should go. Still changes nothing. If you already have a plan, it asks first, because a new plan replaces the old one and your Y/N changes.
+3. **3. Open the report** - opens `report.html` in your browser: counts, the proposed folders, screenshots, duplicates and warnings.
+4. **Open the plan in Excel** - opens `manifest.csv`. Each row is one proposed change. Set `approved` to **Y** (do it) or **N** (don't), save as CSV, and **close Excel**. The column meanings are in [First run, step 3](#step-3---review-manifestcsv-and-reporthtml). This button is greyed out until a plan exists.
+5. **4. Try it: 50 files from Downloads** - shows what it would do to up to 50 Downloads files, then asks "Move these files now? You can undo this." Only rows you approved are done.
+6. **5. Undo the last run** - shows what it would put back, then asks "Put these files back where they were?" Try this once after the trial to see that your files return exactly as they were.
+7. **6. Do everything I approved** - shows the full list, then asks "Carry out all approved changes now? You can undo this."
+
+The app reminds you to save and close `manifest.csv` in Excel before the trial and the full run. If something fails, the window shows the problem in red and does not go on to the real run. Only one job runs at a time; the other buttons are greyed out until it ends.
+
+### 1.5 Extra buttons
+
+- **Quick tidy (Downloads, Desktop, Screenshots)** - a fast clean-up of those three folders. It does only the moves tidyup is highly confident about, shows them first, and asks "Tidy these files now? You can undo this." See [Upkeep](#6-quick-tidy-with-tidyup-upkeep).
+- **Move to another drive...** - pick the target folder (for example `D:\`). It previews, then asks before copying, checking and moving. **Open the move list** opens `migrate_manifest.csv` so you can review it. See [Moving your files to the D: drive](#5-moving-your-files-to-the-d-drive).
+- **Show past runs** - lists the runs you can undo.
+
+Typed commands: the same folder also holds **`tidyup-cli.exe`**. It works like `python -m tidyup` (see the [Command reference](#7-command-reference)). Open a terminal in the folder and type, for example, `tidyup-cli.exe scan`.
+
+### 1.6 Updating and removing
+
+- **Update:** download the new zip and replace the old `tidyup` folder with the new one. Your settings and undo logs are kept, because they live in `C:\Users\<you>\tidyup`, not in the app folder.
+- **Remove:** delete the `tidyup` app folder. To remove settings and undo logs too, delete `C:\Users\<you>\tidyup`. Your organized files are not affected.
+
+### 1.7 For the repo owner: making a new download
+
+1. On GitHub open the project, then **Releases**, then **Draft a new release**.
+2. Choose a new tag, such as `v1.0.0`, and give it a title.
+3. Click **Publish release**.
+4. After about 10 minutes, `tidyup-windows.zip` is attached to the release automatically. (If it isn't, check the **Actions** tab for the **build-exe** run.)
+
+---
+
+## 2. The other way: run it with Python
 
 You need Windows 10 or 11 and Python 3.11 or newer.
 
-### 1.1 Install Python
+### 2.1 Install Python
 
 1. Go to <https://www.python.org/downloads/> and download the latest Python 3 installer for Windows.
 2. Run it. On the **first screen, tick "Add python.exe to PATH"** (at the bottom). This is easy to miss and important.
 3. Click "Install Now".
 4. Check it worked: press the Windows key, type `cmd`, press Enter, and type `python --version`. You should see `Python 3.11` or higher.
 
-### 1.2 Download tidyup
+### 2.2 Download tidyup
 
 Option A - ZIP (easiest): on the GitHub page of this project click the green **Code** button, then **Download ZIP**. Right-click the ZIP, choose **Extract All**, and put the folder somewhere simple, for example `C:\tidyup`.
 
@@ -29,11 +87,11 @@ Option B - git (if you have it installed): open a terminal and run
 git clone https://github.com/miklHwang/fileOrganizer C:\tidyup
 ```
 
-### 1.3 Open a terminal in that folder
+### 2.3 Open a terminal in that folder
 
 Open the folder in File Explorer, click the address bar, type `cmd` (or `powershell`) and press Enter. A terminal opens already in the right folder.
 
-### 1.4 Create a virtual environment (once)
+### 2.4 Create a virtual environment (once)
 
 A virtual environment is a private box for tidyup's add-ons, so it does not mix with anything else on your PC.
 
@@ -41,7 +99,7 @@ A virtual environment is a private box for tidyup's add-ons, so it does not mix 
 python -m venv .venv
 ```
 
-### 1.5 Activate it (every time you open a new terminal)
+### 2.5 Activate it (every time you open a new terminal)
 
 In **cmd**:
 
@@ -65,7 +123,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 When it works you will see `(.venv)` at the start of the line.
 
-### 1.6 Install the add-ons
+### 2.6 Install the add-ons
 
 ```
 pip install -r requirements.txt
@@ -82,14 +140,14 @@ All commands in this guide are typed as `python -m tidyup <command>` from the ti
 
 ---
 
-## 2. Edit config.yaml
+## 3. Edit config.yaml
 
 `config.yaml` in the tidyup folder holds all settings. Open it with Notepad. Every setting has a plain-language comment. Lines starting with `#` are notes and are ignored. Keep the indentation as it is; if you break something, tidyup tells you which setting is wrong.
 
 By default tidyup finds your folders itself (including when OneDrive has taken over Documents, Desktop or Pictures), looks through Documents, Desktop, Downloads, Pictures, Videos and OneDrive, and organizes files **in place**. The things people most often change:
 
 - `destination: root:` - set to e.g. `'D:\Organized'` to collect everything under one folder instead of organizing in place. Use single quotes around Windows paths.
-- `delete_mode:` - `review` (default) or `recycle_bin`. See [Safety](#7-safety-what-tidyup-will-never-do).
+- `delete_mode:` - `review` (default) or `recycle_bin`. See [Safety](#8-safety-what-tidyup-will-never-do).
 - `exclusions:` - file names and full paths tidyup must ignore.
 - `atomic:` - folders that are moved as one unit and never reorganized inside (programming projects, app data).
 - `categories:` - the document categories and the words that identify them. Add your own words.
@@ -100,7 +158,7 @@ You can keep several config files and choose one with `--config path\to\other.ya
 
 ---
 
-## 3. First run walkthrough
+## 4. First run walkthrough
 
 Take these steps in order. Nothing is moved until step 4.
 
@@ -180,7 +238,7 @@ If you changed files after planning, re-run `scan` and `plan` first (this rewrit
 
 ---
 
-## 4. Moving your files to the D: drive
+## 5. Moving your files to the D: drive
 
 Do this **after** the cleanup, when you want your organized folders on a bigger drive.
 
@@ -207,7 +265,7 @@ By default the OneDrive folder is not migrated (`migrate: include_onedrive: fals
 
 ---
 
-## 5. Quick tidy with `tidyup upkeep`
+## 6. Quick tidy with `tidyup upkeep`
 
 `upkeep` is a quick tidy of **Downloads, Desktop and your Screenshots folder**. Run it only when needed, whenever Downloads or your Desktop get cluttered. Nothing runs by itself; there is no scheduled task.
 
@@ -228,7 +286,7 @@ python -m tidyup upkeep --yes         (no question)
 
 ---
 
-## 6. Command reference
+## 7. Command reference
 
 Run `python -m tidyup --help` or `python -m tidyup <command> --help` for the same information.
 
@@ -260,7 +318,7 @@ Files tidyup keeps in `tidyup_data\` (next to `config.yaml`): `inventory.csv`, `
 
 ---
 
-## 7. Safety - what tidyup will never do
+## 8. Safety - what tidyup will never do
 
 1. **It never deletes a file.** "Delete" means moving it to the `_Review_Delete` folder, where you decide. The only removals are of its own temporary copies, of empty folders it created itself, and of an original after a cross-drive copy has been verified.
 2. **It never touches system areas**: `C:\Windows`, Program Files, ProgramData, AppData, `$Recycle.Bin`, System Volume Information. It also never touches **hidden or system files**, and **any file or folder whose name starts with a dot** (like `.gitignore`) is treated as hidden and left alone.
@@ -283,7 +341,7 @@ Files tidyup keeps in `tidyup_data\` (next to `config.yaml`): `inventory.csv`, `
 
 ---
 
-## 8. Defaults we chose
+## 9. Defaults we chose
 
 Where the original request did not say, these are the choices made. Most can be changed in `config.yaml`.
 
@@ -310,13 +368,13 @@ Where the original request did not say, these are the choices made. Most can be 
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 **"python is not recognized"** - Python was installed without "Add python.exe to PATH". Run the Python installer again, choose Modify/Repair, or reinstall and tick the box. Then open a new terminal.
 
 **PowerShell: "running scripts is disabled"** - run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use cmd instead.
 
-**"No module named ..."** - the virtual environment is not active (no `(.venv)` at the start of the line). Activate it (step 1.5), then run `pip install -r requirements.txt` again.
+**"No module named ..."** - the virtual environment is not active (no `(.venv)` at the start of the line). Activate it (step 2.5), then run `pip install -r requirements.txt` again.
 
 **A message about the config file** - tidyup names the setting that is wrong. Check the indentation and quotes in `config.yaml`. Windows paths need single quotes: `'D:\Organized'`. If unsure, compare with a fresh copy of the file.
 
@@ -336,7 +394,7 @@ Where the original request did not say, these are the choices made. Most can be 
 
 ---
 
-## 10. Let Claude Code run it for you
+## 11. Let Claude Code run it for you
 
 If you use Claude Code, it can run tidyup for you and explain each step. It has to be Claude Code on **this Windows PC** (the desktop app or the terminal). A cloud session can't see your files.
 

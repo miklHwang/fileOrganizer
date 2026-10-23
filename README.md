@@ -102,7 +102,7 @@ You can keep several config files and choose one with `--config path\to\other.ya
 
 ## 3. First run walkthrough
 
-Take these steps in order. Nothing is moved until step 5.
+Take these steps in order. Nothing is moved until step 4.
 
 ### Step 1 - scan (read-only)
 
@@ -209,7 +209,7 @@ By default the OneDrive folder is not migrated (`migrate: include_onedrive: fals
 
 ## 5. Quick tidy with `tidyup upkeep`
 
-`upkeep` is a quick tidy of **Downloads, Desktop and your Screenshots folder**. Run it whenever those get messy, for example once a week or after a big download session. Nothing runs by itself; there is no scheduled task.
+`upkeep` is a quick tidy of **Downloads, Desktop and your Screenshots folder**. Run it only when needed, whenever Downloads or your Desktop get cluttered. Nothing runs by itself; there is no scheduled task.
 
 What it does:
 

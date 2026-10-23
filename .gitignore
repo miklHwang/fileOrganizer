@@ -4,3 +4,5 @@ __pycache__/
 venv/
 tidyup_data/
 .pytest_cache/
+build/
+dist/

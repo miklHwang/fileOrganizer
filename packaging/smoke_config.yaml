@@ -1,0 +1,4 @@
+# Used only by the build-exe workflow smoke test. TIDYUP_SMOKE is a temp folder made by the workflow.
+sources:
+  - "%TIDYUP_SMOKE%/files"
+work_dir: "%TIDYUP_SMOKE%/work"

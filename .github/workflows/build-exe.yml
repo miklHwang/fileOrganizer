@@ -1,0 +1,60 @@
+name: build-exe
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+      - name: Install dependencies
+        run: pip install -r requirements-build.txt
+      - name: Build with PyInstaller
+        run: pyinstaller packaging/tidyup.spec --noconfirm
+      - name: Smoke test, CLI version
+        run: |
+          .\dist\tidyup\tidyup-cli.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "tidyup-cli --version failed ($LASTEXITCODE)" }
+      - name: Smoke test, CLI dry-run scan of a temp folder
+        run: |
+          $smoke = Join-Path $env:RUNNER_TEMP "tidyup-smoke"
+          New-Item -ItemType Directory -Force -Path (Join-Path $smoke "files") | Out-Null
+          Set-Content -Path (Join-Path $smoke "files\notes.txt") -Value "hello"
+          Set-Content -Path (Join-Path $smoke "files\setup.exe") -Value "x"
+          Set-Content -Path (Join-Path $smoke "files\photo.jpg") -Value "x"
+          $env:TIDYUP_SMOKE = $smoke
+          .\dist\tidyup\tidyup-cli.exe --config packaging\smoke_config.yaml --dry-run scan
+          if ($LASTEXITCODE -ne 0) { throw "tidyup-cli scan failed ($LASTEXITCODE)" }
+      - name: Smoke test, GUI selftest
+        timeout-minutes: 3
+        run: |
+          $p = Start-Process -FilePath ".\dist\tidyup\tidyup.exe" -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "tidyup.exe --selftest failed ($($p.ExitCode))" }
+      - name: Zip the app
+        run: Compress-Archive -Path dist\tidyup -DestinationPath tidyup-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tidyup-windows
+          path: tidyup-windows.zip
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$env:TAG" tidyup-windows.zip --clobber

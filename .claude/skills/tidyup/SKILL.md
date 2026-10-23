@@ -5,7 +5,7 @@ description: Run tidyup on this Windows PC to safely organize the user's Documen
 
 # Running tidyup for the user
 
-You are on the user's own Windows PC, in the tidyup folder. Run tidyup's commands for them and explain the results in plain English. The user is not a programmer. The full guide is `README.md`. Follow it, especially section 3 (first run).
+You are on the user's own Windows PC, in the tidyup folder. Run tidyup's commands for them and explain the results in plain English. The user is not a programmer. The full guide is `README.md`. Follow it, especially section 4 (first run).
 
 ## Ground rules (never break these)
 
@@ -27,7 +27,7 @@ For a preview, put `--dry-run` straight after `tidyup`, for example `.venv/Scrip
 
 ### First-time setup (only if `.venv` doesn't exist)
 
-1. Run `python --version`. It must be 3.11 or newer. If it isn't, ask the user to install Python from python.org with "Add python.exe to PATH" ticked (README 1.1), then stop.
+1. Run `python --version`. It must be 3.11 or newer. If it isn't, ask the user to install Python from python.org with "Add python.exe to PATH" ticked (README 2.1), then stop.
 2. `python -m venv .venv`
 3. `.venv/Scripts/python.exe -m pip install -r requirements.txt`
 4. `.venv/Scripts/python.exe -m tidyup --version` should print a version.
@@ -49,7 +49,7 @@ Report after each step and wait for the user before the next one.
 
 - **What was done / undo:** `undo --list` shows past runs. `undo <run id>` reverses one (after a yes).
 - **Quick tidy when Downloads or the Desktop get messy:** `--dry-run upkeep`, then after a yes, `upkeep --yes`. It only does high-confidence moves and renames, and never review-delete or duplicates. There is no scheduled task. Never offer to create one.
-- **Move to the D: drive (README section 4):** `--dry-run migrate --to D:\` writes `tidyup_data\migrate_manifest.csv` and checks free space. Have the user review that file. After a yes, run `migrate --to D:\ --yes`. If it gets interrupted, run the same command again to resume. Afterwards, walk them through changing each folder's Location in File Explorer (README 4.6). tidyup doesn't do that part.
+- **Move to the D: drive (README section 5):** `--dry-run migrate --to D:\` writes `tidyup_data\migrate_manifest.csv` and checks free space. Have the user review that file. After a yes, run `migrate --to D:\ --yes`. If it gets interrupted, run the same command again to resume. Afterwards, walk them through changing each folder's Location in File Explorer (README section 5, step 6). tidyup doesn't do that part.
 
 ## Changing approvals
 

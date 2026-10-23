@@ -1,6 +1,6 @@
 # CLAUDE.md - tidyup
 
-tidyup is a Python 3.11+ command-line file organizer for a Windows 10/11 PC. It is developed and tested on Linux, so every Windows-specific call sits behind small mockable functions in `winutil`. Run it with `python -m tidyup <command>`. Specs: `docs/SPEC.md` (with its amendment) and `docs/PLAN.md`.
+tidyup is a Python 3.11+ command-line file organizer for a Windows 10/11 PC. It is developed and tested on Linux, so every Windows-specific call sits behind small mockable functions in `winutil`. Run it with `python -m tidyup <command>`. Specs: `docs/SPEC.md` (with its amendment) and `docs/PLAN.md`. To run tidyup on the user's PC for them (not to develop it), follow the `/tidyup` skill in `.claude/skills/tidyup/SKILL.md`.
 
 Commands: `scan`, `plan`, `report`, `apply`, `undo`, `migrate`, `upkeep`. All accept `--config` and `--dry-run`. There is NO scheduled task and no `schedule` command. Upkeep runs only when the user asks for it.
 

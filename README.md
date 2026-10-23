@@ -4,7 +4,7 @@ tidyup sorts the files in your Documents, Desktop, Downloads, Pictures, Videos a
 
 You run it yourself, when you want. **There is no scheduled or background task.**
 
-Contents: [Install](#1-install) | [Settings](#2-edit-configyaml) | [First run](#3-first-run-walkthrough) | [Moving to D:](#4-moving-your-files-to-the-d-drive) | [Upkeep](#5-quick-tidy-with-tidyup-upkeep) | [Commands](#6-command-reference) | [Safety](#7-safety-what-tidyup-will-never-do) | [Defaults](#8-defaults-we-chose) | [Troubleshooting](#9-troubleshooting)
+Contents: [Install](#1-install) | [Settings](#2-edit-configyaml) | [First run](#3-first-run-walkthrough) | [Moving to D:](#4-moving-your-files-to-the-d-drive) | [Upkeep](#5-quick-tidy-with-tidyup-upkeep) | [Commands](#6-command-reference) | [Safety](#7-safety-what-tidyup-will-never-do) | [Defaults](#8-defaults-we-chose) | [Troubleshooting](#9-troubleshooting) | [Claude Code](#10-let-claude-code-run-it-for-you)
 
 ---
 
@@ -26,7 +26,7 @@ Option A - ZIP (easiest): on the GitHub page of this project click the green **C
 Option B - git (if you have it installed): open a terminal and run
 
 ```
-git clone <the repository address> C:\tidyup
+git clone https://github.com/miklHwang/fileOrganizer C:\tidyup
 ```
 
 ### 1.3 Open a terminal in that folder
@@ -331,3 +331,28 @@ Where the original request did not say, these are the choices made. Most can be 
 **Something unexpected happened** - run the command again with `--debug` for full details. Crash reports are saved in `tidyup_data\logs\`.
 
 **A file I expected to be sorted was left alone** - it may be hidden, excluded in `config.yaml`, inside an atomic folder, already in the right place, or in a folder that is not in `sources`.
+
+---
+
+## 10. Let Claude Code run it for you
+
+If you use Claude Code, it can run tidyup for you and explain each step. It has to be Claude Code on **this Windows PC** (the desktop app or the terminal). A cloud session can't see your files.
+
+1. Get tidyup with git. Claude Code on Windows needs Git for Windows anyway.
+
+   ```
+   git clone https://github.com/miklHwang/fileOrganizer C:\tidyup
+   ```
+
+   To get updates later: `git -C C:\tidyup pull`.
+2. Start Claude Code in that folder. In a terminal: `cd C:\tidyup`, then `claude`. In the desktop app, pick `C:\tidyup` as the folder.
+3. Type `/tidyup`, or just ask, for example "tidy up my Downloads" or "move my organized folders to D:".
+
+Claude Code follows `.claude/skills/tidyup/SKILL.md`:
+
+- It sets up the virtual environment if needed.
+- It previews each step with `--dry-run` and explains it.
+- It asks you before anything is moved, every time.
+- It never moves or deletes files itself. Only tidyup does, and every run can be undone.
+
+Claude Code also asks before running any command. The read-only ones (`scan`, `report`, `undo --list` and previews) are already allowed in `.claude/settings.json`.

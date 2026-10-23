@@ -2,6 +2,8 @@ AMENDMENT (2026-10-23, at the user's request): tidyup runs on an as-needed basis
 
 AMENDMENT 2 (2026-10-23, at the user's request): archives (.zip, .7z, .rar, and similar) stay in the folder they are in, because many belong with that folder. They are not moved to Archives/, _Unsorted or _Duplicates. A config switch (`rules: archives: keep_in_place: false`) restores collecting Downloads archives into Archives/.
 
+AMENDMENT 3 (2026-10-23, at the user's request): tidyup is also delivered as a Windows app the user downloads as a .exe. Double-clicking `tidyup.exe` opens a window with buttons for the same safe workflow (scan, plan, review, trial apply, undo, full apply, upkeep, migrate). Every change still goes through the manifest, a preview, and an explicit confirmation, and every hard safety rule still applies. A console `tidyup-cli.exe` offers the same commands without Python. GitHub Actions builds both on Windows and attaches them to GitHub Releases. No Python install is needed to use the app.
+
 Build "tidyup", a Python command-line file organizer for my Windows 10/11 PC. I'll clone this repo and run it locally. The build happens in a Linux cloud environment, so all Windows-specific code must sit behind small functions that tests can mock. Builders make sensible defaults rather than stopping to ask, and note them in the README.
 
 GOALS

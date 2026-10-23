@@ -136,6 +136,22 @@ def _opt(v: object) -> str:
     return "" if v is None else str(v)
 
 
+_FORMULA_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _neutralise(v: object) -> object:
+    """Prefix text cells that Excel would treat as formulas with an apostrophe."""
+    if isinstance(v, str) and v.startswith(_FORMULA_CHARS):
+        return "'" + v
+    return v
+
+
+def _unneutralise(v: str) -> str:
+    if v.startswith("'") and v[1:2] and v[1] in _FORMULA_CHARS:
+        return v[1:]
+    return v
+
+
 def _write_csv(path: Path, columns: list[str], rows: Iterable[list[str]], delimiter: str) -> int:
     path = Path(path)
     Path(winutil.long_path(path.parent)).mkdir(parents=True, exist_ok=True)
@@ -144,7 +160,7 @@ def _write_csv(path: Path, columns: list[str], rows: Iterable[list[str]], delimi
         w = csv.writer(fh, delimiter=delimiter, quoting=csv.QUOTE_MINIMAL)
         w.writerow(columns)
         for r in rows:
-            w.writerow(r)
+            w.writerow([_neutralise(c) for c in r])
             n += 1
     return n
 
@@ -185,7 +201,7 @@ def _read_table(path: Path) -> tuple[list[str], list[tuple[int, dict[str, str]]]
             continue
         if not row or all(not c.strip() for c in row):
             continue
-        out.append((rownum, {h: (row[i] if i < len(row) else "") for i, h in enumerate(header)}))
+        out.append((rownum, {h: (_unneutralise(row[i]) if i < len(row) else "") for i, h in enumerate(header)}))
     return header or [], out
 
 

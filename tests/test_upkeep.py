@@ -68,10 +68,26 @@ def test_only_high_move_rename(cfg, fake_tree, crafted):
 
 def test_dry_run_changes_nothing(cfg, fake_tree, crafted):
     before = snapshot(fake_tree.folders["home"])
+    work_before = snapshot(cfg.work_dir) if cfg.work_dir.exists() else None
     res = upkeep.run_upkeep(cfg, dry_run=True)
     assert res.dry_run and res.run_id is None
     assert upkeep.command(cfg, _args(dry_run=True)) == 0
     assert snapshot(fake_tree.folders["home"]) == before
+    if work_before is None:
+        assert not cfg.work_dir.exists()
+    else:
+        assert snapshot(cfg.work_dir) == work_before
+    assert not cfg.logs_dir.exists() or not any(cfg.logs_dir.iterdir())
+
+
+def test_never_actions_even_if_configured(cfg, fake_tree, crafted):
+    rows, dest, _ = crafted
+    cfg.upkeep["actions"] = ["move", "rename", "move_rename", "review_delete", "duplicate", "skip"]
+    res = upkeep.run_upkeep(cfg)
+    d = fake_tree.folders["downloads"]
+    assert (d / "d_high_del.txt").exists() and (d / "e_high_dup.txt").exists()
+    assert not (dest / "d_high_del_new.txt").exists() and not (dest / "e_high_dup_new.txt").exists()
+    assert res.moved == 2
 
 
 def test_confirmation(cfg, fake_tree, crafted, monkeypatch):

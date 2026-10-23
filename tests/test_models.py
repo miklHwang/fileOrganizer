@@ -115,3 +115,20 @@ def test_invalid_confidence_and_missing_column(tmp_path):
     p.write_text("id,action,source\n1,move,/a\n", encoding="utf-8")
     with pytest.raises(ManifestError, match="missing"):
         models.read_manifest(p)
+
+
+def test_manifest_formula_injection_neutralised(tmp_path):
+    p = tmp_path / "m.csv"
+    row = ManifestRow(id=1, action=Action.MOVE, source=Path("C:/a/b.txt"), destination=Path("C:/x/b.txt"),
+                      rule="+cmd", confidence=Confidence.HIGH, notes='=HYPERLINK("x")', approved=True)
+    plain = ManifestRow(id=2, action=Action.MOVE, source=Path("C:/a/c.txt"), destination=Path("C:/x/c.txt"),
+                        rule="ext", confidence=Confidence.HIGH, notes="normal note", approved=False)
+    models.write_manifest(p, [row, plain])
+    raw = p.read_text(encoding="utf-8-sig")
+    assert "'+cmd" in raw and "'=HYPERLINK" in raw
+    assert ",ext,high,normal note,N" in raw.lower() or "normal note" in raw
+    back = models.read_manifest(p)
+    assert back[0].rule == "+cmd" and back[0].notes == '=HYPERLINK("x")'
+    assert back[0].approved is True and back[1].approved is False
+    assert back[1].notes == "normal note" and back[1].rule == "ext"
+    assert "'" not in raw.split("\n", 2)[2]

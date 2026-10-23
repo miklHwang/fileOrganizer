@@ -7,7 +7,7 @@ Source of truth for requirements: `docs/SPEC.md`. This file is the source of tru
 Phase 1 (foundation): [x] P1-T1 [x] P1-T2 [x] P1-T3 [x] P1-T4 [x] P1-T5 [x] P1-T6
 Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (removed) [x] P2-T6
 Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
-Phase 4 (planning + upkeep): [ ] P4-T1 [ ] P4-T2
+Phase 4 (planning + upkeep): [x] P4-T1 [x] P4-T2
 Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
 
 22 tasks (P2-T5 schedule removed: tidyup is run as needed, no scheduled task). Per-task checkboxes are repeated in §4.
@@ -879,12 +879,12 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 ### Phase 4 — Planning and upkeep (parallel; depend on Phase 3)
 
-#### - [ ] P4-T1 plan
+#### - [x] P4-T1 plan
 - Owns: `tidyup/plan.py`, `tests/test_plan.py`. Reads: rules, dupes, config, models, fsops (`unique_path`), scan (tests only), console. Depends: P3-T1, P3-T2.
 - Acceptance: §1.3 plan algorithm; every inventory record yields exactly one row; manifest opens with the exact 8 columns.
 - Tests (scan the fixture with `mock_attrs`, then plan): one row per record; actions/destinations for every §3 handle; duplicates → `_Duplicates` with "duplicate of" note, keeper not moved; version-chain older rows N with note; `test_collision_reserved` (notes.txt pair → `notes.txt` and `notes (2).txt`; existing review screenshot → " (2)"); `test_onedrive_exit_warning` (dest_root outside OneDrive → WARNING note, N, printed block; cloud-only → `cloud_only_leave_onedrive` skip); in place keeps OneDrive files in OneDrive; atomic rows skip; `already_filed` for files in target structure; approved defaults; dry run writes nothing; missing inventory → friendly error.
 
-#### - [ ] P4-T2 upkeep
+#### - [x] P4-T2 upkeep
 - Owns: `tidyup/upkeep.py`, `tests/test_upkeep.py`. Reads: scan, plan, apply, config, models, console. Depends: P3-T1, P3-T3 (plan via its §1.3 interface).
 - Acceptance: §1.3 upkeep; never selects review_delete/duplicate or non-high rows. Asks once before moving anything unless `--yes`.
 - Tests: `test_only_high_move_rename` — monkeypatch `plan.build_manifest` to return a crafted mix (high move, high rename, medium move, high review_delete, high duplicate, low move_rename) over fixture files; only the first two applied; upkeep manifest + `kind="upkeep"` journal written; upkeep.log line appended; sources limited to downloads/desktop/screenshots (scan called with `with_sources`); dry run changes nothing. `test_confirmation`: `command` with input 'n' moves nothing; non-interactive without `--yes` refused (exit 1, nothing moved); `--yes` proceeds.

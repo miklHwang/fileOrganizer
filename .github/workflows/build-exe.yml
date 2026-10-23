@@ -2,7 +2,7 @@ name: build-exe
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   pull_request:
   workflow_dispatch:
   release:
@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,16 +31,35 @@ jobs:
         run: |
           .\dist\tidyup\tidyup-cli.exe --version
           if ($LASTEXITCODE -ne 0) { throw "tidyup-cli --version failed ($LASTEXITCODE)" }
-      - name: Smoke test, CLI dry-run scan of a temp folder
+      - name: Smoke test, CLI without Python on PATH
+        run: |
+          Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          $env:PATH = "C:\Windows\System32;C:\Windows"
+          & "$env:GITHUB_WORKSPACE\dist\tidyup\tidyup-cli.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "tidyup-cli without Python failed ($LASTEXITCODE)" }
+      - name: Smoke test, CLI scan, plan and report on a temp folder
         run: |
           $smoke = Join-Path $env:RUNNER_TEMP "tidyup-smoke"
-          New-Item -ItemType Directory -Force -Path (Join-Path $smoke "files") | Out-Null
-          Set-Content -Path (Join-Path $smoke "files\notes.txt") -Value "hello"
-          Set-Content -Path (Join-Path $smoke "files\setup.exe") -Value "x"
-          Set-Content -Path (Join-Path $smoke "files\photo.jpg") -Value "x"
+          $files = Join-Path $smoke "files"
+          New-Item -ItemType Directory -Force -Path $files | Out-Null
+          Set-Content -Path (Join-Path $files "notes.txt") -Value "hello"
+          Set-Content -Path (Join-Path $files "setup.exe") -Value "x"
           $env:TIDYUP_SMOKE = $smoke
-          .\dist\tidyup\tidyup-cli.exe --config packaging\smoke_config.yaml --dry-run scan
-          if ($LASTEXITCODE -ne 0) { throw "tidyup-cli scan failed ($LASTEXITCODE)" }
+          $env:SMOKE_FILES = $files
+          python -c "import os; from PIL import Image; Image.new('RGB', (1920, 1080), (30, 60, 90)).save(os.path.join(os.environ['SMOKE_FILES'], 'shot.png'))"
+          python -c "import os; from pypdf import PdfWriter; w = PdfWriter(); w.add_blank_page(width=200, height=200); w.write(os.path.join(os.environ['SMOKE_FILES'], 'doc.pdf'))"
+          python -c "import os; import docx; d = docx.Document(); d.add_paragraph('Smoke test'); d.save(os.path.join(os.environ['SMOKE_FILES'], 'letter.docx'))"
+          $cli = ".\dist\tidyup\tidyup-cli.exe"
+          & $cli --config packaging\smoke_config.yaml --dry-run scan
+          if ($LASTEXITCODE -ne 0) { throw "dry-run scan failed ($LASTEXITCODE)" }
+          foreach ($cmd in "scan", "plan", "report") {
+            & $cli --config packaging\smoke_config.yaml $cmd
+            if ($LASTEXITCODE -ne 0) { throw "$cmd failed ($LASTEXITCODE)" }
+          }
+          foreach ($f in "inventory.csv", "manifest.csv", "report.html") {
+            if (-not (Test-Path (Join-Path $smoke "work\$f"))) { throw "missing $f in smoke work folder" }
+          }
       - name: Smoke test, GUI selftest
         timeout-minutes: 3
         run: |
@@ -52,9 +71,20 @@ jobs:
         with:
           name: tidyup-windows
           path: tidyup-windows.zip
+
+  release:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tidyup-windows
       - name: Attach to the release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$env:TAG" tidyup-windows.zip --clobber
+        run: gh release upload "$TAG" tidyup-windows.zip --clobber

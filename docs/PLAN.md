@@ -6,7 +6,7 @@ Source of truth for requirements: `docs/SPEC.md`. This file is the source of tru
 
 Phase 1 (foundation): [x] P1-T1 [x] P1-T2 [x] P1-T3 [x] P1-T4 [x] P1-T5 [x] P1-T6
 Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (removed) [x] P2-T6
-Phase 3 (commands): [ ] P3-T1 [ ] P3-T2 [ ] P3-T3 [ ] P3-T4 [ ] P3-T5 [ ] P3-T6
+Phase 3 (commands): [x] P3-T1 [x] P3-T2 [x] P3-T3 [x] P3-T4 [x] P3-T5 [x] P3-T6
 Phase 4 (planning + upkeep): [ ] P4-T1 [ ] P4-T2
 Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
 
@@ -847,32 +847,32 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 ### Phase 3 — Commands (all parallel; depend on Phase 2)
 
-#### - [ ] P3-T1 scan
+#### - [x] P3-T1 scan
 - Owns: `tidyup/scan.py`, `tests/test_scan.py`. Reads: config, safety, winutil, fsops, extract, models, console. Depends: P2-T2, P2-T3.
 - Acceptance: §1.3 scan; read-only (snapshot unchanged); inventory written to `cfg.inventory_path`.
 - Tests: fixture scan with `mock_attrs`: every expected file present; `test_protected_hidden_excluded_not_inventoried`; `test_atomic_folders_single_row` (3 atomic rows, no inner rows, file_count/size correct); `test_cloud_only_marked_not_hashed` (is_cloud_only Y, sha256/image fields empty, `open_spy` has no cloud path); sha256 only for size collisions; image info filled; KFM de-dup (no double rows); `test_locked_file_continues` (patch `fsops.sha256_file` to raise FileLockedError for one path); summary counts; dry run writes nothing; tree snapshot unchanged.
 
-#### - [ ] P3-T2 rules
+#### - [x] P3-T2 rules
 - Owns: `tidyup/rules.py`, `tests/test_rules.py`. Reads: config, models, extract, winutil. Depends: P2-T3.
 - Acceptance: §1.3 rules order and confidences; cloud-only never passed to extract.
 - Tests: build `FileRecord`s from fixture files (via `extract.read_image_info`, `os.stat`) — do not use scan; screenshot scores for the three fixture screenshots (high) and drawing.png (< min); photo dates exif/filename/modified; video; installer old/new + archive only in Downloads; invoice/statement/syllabus → high with names matching `^\d{4}-\d{2}-\d{2}_(Receipts|Finance|School)_[A-Za-z0-9-]+\.pdf$`; scanned → Documents/Housing medium; plain → _Unsorted/PDFs low; docx Work high; txt → _Unsorted/Documents low; cloud PDF classified by name with `open_spy` empty; `date_from_text` and `date_from_filename` tables; `slugify`; `is_in_target_structure`.
 
-#### - [ ] P3-T3 apply
+#### - [x] P3-T3 apply
 - Owns: `tidyup/apply.py`, `tests/test_apply.py`. Reads: fsops, safety, journal, models, config, winutil, console. Depends: P2-T2.
 - Acceptance: §1.3 apply; only approved non-skip rows; journal complete; continues past failures.
 - Tests (hand-written manifests over the fake tree): `test_only_approved_rows`; `--limit`, `--only-rule`, `--only-folder`; `test_review_delete_moves_not_deletes` (review mode) and recycle mode calls mocked `winutil.send_to_recycle_bin`; `test_refuses_protected_and_hidden_rows`; `test_refuses_row_inside_atomic_folder` (file in `.git` and `src/main.py`); atomic folder row moved whole; destination collision → " (2)"; `test_locked_file_skipped_and_logged` (patch `fsops.move_file` to raise FileLockedError for one row; others applied; journal has skip); dry run changes nothing and writes no log; confirmation refused → nothing done; `command` with `--yes`.
 
-#### - [ ] P3-T4 undo
+#### - [x] P3-T4 undo
 - Owns: `tidyup/undo.py`, `tests/test_undo.py`. Reads: fsops, journal, models, config, console. Depends: P2-T2.
 - Acceptance: §1.3 undo.
 - Tests (journals produced by calling `fsops.move_file`/`move_tree` with a `Journal`): restores files and removes created dirs (snapshot equal); cross-volume undo (`cross_volume` fixture); occupied original path → " (2)" + warning; missing dst skipped; trash entries listed as manual; undo of an interrupted run (no run_end); undo writes its own log and marks original undone; latest-run default; undoing the undo re-applies; `--list` output; dry run changes nothing.
 
-#### - [ ] P3-T5 report
+#### - [x] P3-T5 report
 - Owns: `tidyup/report.py`, `tests/test_report.py`. Reads: models, dupes, extract, config, console. Depends: P2-T3, P2-T4.
 - Acceptance: §1.3 report; self-contained; all section ids present.
 - Tests: build from fixture records (constructed directly) + hand-written rows; sections `summary`, `tree`, `screenshots`, `duplicates`, `near-duplicates`, `versions`, `onedrive` present; screenshot `<img src="data:image/jpeg;base64,`; cloud-only screenshot shows placeholder and `open_spy` has no cloud path; no `http://`/`https://` in src/href; HTML escaping of `<script>` in a filename; thumbnail cap; rows None → "Run tidyup plan"; output parses with `html.parser` without error.
 
-#### - [ ] P3-T6 migrate
+#### - [x] P3-T6 migrate
 - Owns: `tidyup/migrate.py`, `tests/test_migrate.py`. Reads: fsops, safety, journal, models, config, winutil, apply (ApplyResult type), console. Depends: P2-T2.
 - Acceptance: §1.3 migrate; never moves without a manifest; resumable.
 - Tests (target `tmp_path/"D"`, `cross_volume` fixture): dry run writes migrate manifest, moves nothing; `test_requires_manifest`; `test_refuses_insufficient_space` (mock `winutil.free_space`); `test_verify_before_remove` (spy order) and corrupt copy keeps source; atomic folder migrated whole incl. `.git`; cloud-only rows skipped and never opened; OneDrive folders skipped by default; resume after simulated crash (patch `fsops.move_file` to raise KeyboardInterrupt on the 3rd file) → second run completes with no " (2)" duplicates and every file present once; timestamps preserved; undo of a migrate run restores sources.

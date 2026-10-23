@@ -5,7 +5,7 @@ Source of truth for requirements: `docs/SPEC.md`. This file is the source of tru
 ## Progress
 
 Phase 1 (foundation): [x] P1-T1 [x] P1-T2 [x] P1-T3 [x] P1-T4 [x] P1-T5 [x] P1-T6
-Phase 2 (building blocks): [ ] P2-T1 [ ] P2-T2 [ ] P2-T3 [ ] P2-T4 ~~P2-T5~~ (removed) [ ] P2-T6
+Phase 2 (building blocks): [x] P2-T1 [x] P2-T2 [x] P2-T3 [x] P2-T4 ~~P2-T5~~ (removed) [x] P2-T6
 Phase 3 (commands): [ ] P3-T1 [ ] P3-T2 [ ] P3-T3 [ ] P3-T4 [ ] P3-T5 [ ] P3-T6
 Phase 4 (planning + upkeep): [ ] P4-T1 [ ] P4-T2
 Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
@@ -818,29 +818,29 @@ Order: P1-T1 → {P1-T2, P1-T3, P1-T5 in parallel} → P1-T4 → P1-T6.
 
 ### Phase 2 — Building blocks (all parallel; depend on Phase 1)
 
-#### - [ ] P2-T1 CLI
+#### - [x] P2-T1 CLI
 - Owns: `tidyup/cli.py`, `tests/test_cli.py`. Reads: config.py, console.py, errors.py, all stubs. Depends: Phase 1.
 - Acceptance: §1.3 cli grammar; options accepted before and after the command; friendly errors and crash file.
 - Tests: `--help` and each subcommand `--help` exit 0; namespace attributes per command; `--dry-run` in both positions; missing `--config` file → exit 1 with message, no traceback; dispatch calls `tidyup.<cmd>.command` (monkeypatched); TidyupError → exit 1; RuntimeError → exit 1 + crash file in work_dir/logs; `--debug` re-raises; KeyboardInterrupt → 130.
 
-#### - [ ] P2-T2 fsops (safe file operations)
+#### - [x] P2-T2 fsops (safe file operations)
 - Owns: `tidyup/fsops.py`, `tests/test_fsops.py`. Reads: winutil.py, safety.py, journal.py, errors.py. Depends: Phase 1.
 - Acceptance: §1.3 fsops algorithm exactly; journal records only after success; static safety test still passes.
 - Tests: `test_unique_path_suffixes` (" (2)", " (3)", reserved set, case-insensitive, dirs); `test_never_overwrites_existing` (dst created between plan and move → " (2)"); same-volume move + journal; `test_cross_volume_verifies_before_remove` (`cross_volume` fixture; spy order: hash(temp) before unlink(src)); `test_corrupt_copy_keeps_source` (patch `shutil.copy2` to write wrong bytes → VerifyError, src intact, no partial, no dst); `test_mtime_preserved_same_and_cross_volume`; cross-volume cloud-only refused; `move_tree` same and cross volume incl. hidden `.git` files; `adopt_identical`; `test_uses_long_path` (spy on `winutil.long_path`); lock error → FileLockedError; `test_refuses_protected`; `ensure_dir` journals created dirs; `remove_empty_dir` refuses non-empty; dry run touches nothing; `trash` calls mocked `winutil.send_to_recycle_bin`.
 
-#### - [ ] P2-T3 extract (content readers)
+#### - [x] P2-T3 extract (content readers)
 - Owns: `tidyup/extract.py`, `tests/test_extract.py`. Reads: winutil.py, errors.py, fixtures. Depends: Phase 1.
 - Acceptance: §1.3 extract; never opens a cloud-only file; corrupt files return None/"".
 - Tests: image info for fixture photos (size, make, model, DateTimeOriginal) and screenshots (no camera); phash is 16 hex chars and near-duplicate distance ≤ 6; `pdf_text` invoice contains "Invoice number", scanned → ""; `docx_text`; thumbnail data URI prefix; `test_refuses_cloud_only` (flag and mocked attrs) with `open_spy` empty; corrupt JPEG/PDF → None/"".
 
-#### - [ ] P2-T4 dupes
+#### - [x] P2-T4 dupes
 - Owns: `tidyup/dupes.py`, `tests/test_dupes.py`. Reads: models.py, config.py, winutil.py. Depends: Phase 1.
 - Acceptance: §1.3 dupes; deterministic output; 20,000 synthetic phashes grouped in < 30 s.
 - Tests: exact groups ignore cloud-only/no-hash/zero-size; keeper prefers Documents over Downloads, clean name over "(1)", older created; `normalize_version_stem` table (`report v3`, `final_FINAL`, `Copy of x`, `x - Copy (2)`, `x (1)`, `x_v2`, `draft`); chains require ≥2 members in same dir/ext; current = newest; near-dup grouping with threshold and exact-dup exclusion; performance test.
 
 #### ~~P2-T5 schedule~~ — REMOVED (tidyup is run as needed; no scheduled task)
 
-#### - [ ] P2-T6 GitHub Actions workflow
+#### - [x] P2-T6 GitHub Actions workflow
 - Owns: `.github/workflows/tests.yml`. Reads: requirements files. Depends: P1-T1.
 - Acceptance: on push and pull_request; matrix `os: [ubuntu-latest, windows-latest]`, `python-version: ["3.11", "3.12"]`, `fail-fast: false`; `actions/checkout@v4`, `actions/setup-python@v5` with pip cache; `pip install -r requirements-dev.txt`; `python -m pytest -q`. Valid YAML.
 - Tests: none (YAML validated by loading it with `yaml.safe_load` in the builder's own check).

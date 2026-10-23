@@ -157,18 +157,47 @@ def _regular_stat(src: Path) -> os.stat_result:
     return st
 
 
-def _same_content(a: Path, b: Path) -> bool:
+def _plain_file_stat(p: Path) -> os.stat_result | None:
+    """lstat of p if it is a regular, non-link, non-cloud-only file; else None (never opens it)."""
     try:
-        if os.lstat(_long(a)).st_size != os.lstat(_long(b)).st_size:
-            return False
+        st = os.lstat(_long(p))
     except OSError:
+        return None
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    attrs = winutil.get_file_attributes(p)
+    if attrs & winutil.FILE_ATTRIBUTE_REPARSE_POINT or winutil.is_cloud_only_attrs(attrs):
+        return None
+    return st
+
+
+def _same_content(a: Path, b: Path) -> bool:
+    sa, sb = _plain_file_stat(a), _plain_file_stat(b)
+    if sa is None or sb is None or sa.st_size != sb.st_size:
         return False
     return sha256_file(a) == sha256_file(b)
 
 
+def _recheck_dest(dst: Path, size: int, mtime_ns: int | None = None) -> None:
+    """Make sure the destination that justifies removing a source is still there and unchanged."""
+    st = _plain_file_stat(dst)
+    if st is None or st.st_size != size or (mtime_ns is not None and st.st_mtime_ns != mtime_ns):
+        raise VerifyError(f"{dst} changed or disappeared before the original was removed; the original was kept")
+
+
+def _partial_name(name: str) -> str:
+    room = 255 - len(PARTIAL_PREFIX)
+    if len(name) <= room:
+        return PARTIAL_PREFIX + name
+    stem, ext = os.path.splitext(name)
+    if len(ext) > 32:
+        ext = ""
+    return PARTIAL_PREFIX + stem[: room - len(ext)] + ext
+
+
 def _copy_verified(src: Path, final: Path, src_hash: str) -> None:
     """Copy src to a partial file next to final, verify, then rename without clobbering."""
-    temp = final.parent / (PARTIAL_PREFIX + final.name)
+    temp = final.parent / _partial_name(final.name)
     if os.path.lexists(_long(temp)):
         _discard_partial(temp)
     try:
@@ -192,10 +221,14 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
 
     adopted = False
     final = dst
+    dst_fp: tuple[int, int] | None = None
     if adopt_identical and os.path.lexists(_long(dst)) and not is_cloud_only \
-            and not winutil.is_cloud_only(src) and _same_content(src, dst):
-        adopted = True
-    else:
+            and not winutil.is_cloud_only(src):
+        dst_st = _plain_file_stat(dst)
+        if dst_st is not None and _same_content(src, dst):
+            adopted = True
+            dst_fp = (dst_st.st_size, dst_st.st_mtime_ns)
+    if not adopted:
         final = unique_path(dst)
 
     cross = not winutil.same_volume(src, final.parent)
@@ -207,6 +240,8 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
     if adopted:
         cross = not winutil.same_volume(src, final.parent)
         digest = sha256_file(src)
+        assert dst_fp is not None
+        _recheck_dest(final, *dst_fp)
         _remove_verified_source(src, size, mtime_ns)
     elif not cross:
         _no_clobber_rename(src, final)
@@ -215,6 +250,7 @@ def move_file(src: Path, dst: Path, *, journal: Journal | None = None, row_id: s
             raise CloudOnlyError(f"{src} is an online-only OneDrive file; not copying it across drives")
         digest = sha256_file(src)
         _copy_verified(src, final, digest)
+        _recheck_dest(final, size)
         _remove_verified_source(src, size, mtime_ns)
 
     if journal is not None:
@@ -282,20 +318,26 @@ def move_tree(src_dir: Path, dst_dir: Path, *, journal: Journal | None = None, r
         target = final / d.relative_to(src_dir)
         if not os.path.isdir(_long(target)):
             _mkdir(target)
+    dests: dict[Path, tuple[Path, int, int | None]] = {}
     for f in files:
         st = infos[f]
         target = final / f.relative_to(src_dir)
         digest = sha256_file(f)
         if os.path.lexists(_long(target)):
-            if adopt_identical and _same_content(f, target):
+            tst = _plain_file_stat(target)
+            if adopt_identical and tst is not None and _same_content(f, target):
+                dests[f] = (target, tst.st_size, tst.st_mtime_ns)
                 continue
             target = unique_path(target)
         _copy_verified(f, target, digest)
+        dests[f] = (target, st.st_size, None)
     for d in dirs:
         shutil.copystat(_long(d), _long(final / d.relative_to(src_dir)))
     # Everything is verified: now remove the sources.
     for f in files:
         st = infos[f]
+        dtarget, dsize, dmtime = dests[f]
+        _recheck_dest(dtarget, dsize, dmtime)
         _remove_verified_source(f, st.st_size, st.st_mtime_ns)
     for d in reversed(dirs):
         try:

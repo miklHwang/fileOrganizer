@@ -330,3 +330,102 @@ def test_trash_calls_recycle_bin(tmp_path, monkeypatch, jnl):
     fsops.trash(f, journal=jnl, row_id="3")
     assert called == [f]
     assert ops(jnl)[-1]["type"] == "trash"
+
+
+def test_adopt_identical_dst_is_directory(tmp_path):
+    src = w(tmp_path / "s" / "f", b"abcd")
+    (tmp_path / "d" / "f").mkdir(parents=True)
+    r = fsops.move_file(src, tmp_path / "d" / "f", adopt_identical=True)
+    assert r.dst.name == "f (2)" and r.dst.read_bytes() == b"abcd" and not src.exists()
+
+
+def test_adopt_identical_dst_is_symlink(tmp_path):
+    src = w(tmp_path / "s" / "f.txt", b"abcd")
+    other = w(tmp_path / "o.txt", b"abcd")
+    (tmp_path / "d").mkdir()
+    try:
+        os.symlink(other, tmp_path / "d" / "f.txt")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks unavailable")
+    r = fsops.move_file(src, tmp_path / "d" / "f.txt", adopt_identical=True)
+    assert r.dst.name == "f (2).txt" and other.read_bytes() == b"abcd"
+
+
+def test_move_tree_cloud_only_existing_target_not_hashed(tmp_path, cross_volume, monkeypatch):
+    proj = tmp_path / "s" / "proj"
+    w(proj / "a.txt", b"aaa")
+    w(proj / "b.txt", b"bbb")
+    cloud = w(tmp_path / "d" / "proj" / "a.txt", b"aaa")
+    real = winutil.is_cloud_only_attrs
+    real_attrs = winutil.get_file_attributes
+    monkeypatch.setattr(winutil, "get_file_attributes",
+                        lambda p: 0x400000 if winutil.norm_key(p) == winutil.norm_key(cloud) else real_attrs(p))
+    monkeypatch.setattr(winutil, "is_cloud_only_attrs", lambda a: bool(a & 0x400000) or real(a))
+    r = fsops.move_tree(proj, tmp_path / "d" / "proj", adopt_identical=True)
+    assert (r.dst / "a (2).txt").read_bytes() == b"aaa" and cloud.read_bytes() == b"aaa"
+    assert not proj.exists()
+
+
+def test_adopt_dest_changed_keeps_source(tmp_path, monkeypatch):
+    src = w(tmp_path / "s" / "f.txt", b"same")
+    dst = w(tmp_path / "d" / "f.txt", b"same")
+    real = fsops.sha256_file
+    calls = []
+
+    def hash_then_change(p, **k):
+        h = real(p, **k)
+        if p == src:
+            calls.append(1)
+            if len(calls) == 2:
+                dst.write_bytes(b"changed!")
+        return h
+
+    monkeypatch.setattr(fsops, "sha256_file", hash_then_change)
+    with pytest.raises(VerifyError):
+        fsops.move_file(src, dst, adopt_identical=True)
+    assert src.read_bytes() == b"same"
+
+
+def test_copy_dest_vanishes_keeps_source(tmp_path, cross_volume, monkeypatch):
+    src = w(tmp_path / "s" / "f.txt", b"data")
+    real = fsops._copy_verified
+
+    def copy_then_delete(s, final, h):
+        real(s, final, h)
+        os.unlink(final)
+
+    monkeypatch.setattr(fsops, "_copy_verified", copy_then_delete)
+    with pytest.raises(VerifyError):
+        fsops.move_file(src, tmp_path / "d" / "f.txt")
+    assert src.read_bytes() == b"data"
+
+
+def test_move_tree_dest_changed_before_source_removal(tmp_path, cross_volume, monkeypatch):
+    proj = tmp_path / "s" / "proj"
+    w(proj / "a.txt", b"aaa")
+    w(proj / "b.txt", b"bbb")
+    real = fsops._copy_verified
+
+    def copy(s, final, h):
+        real(s, final, h)
+        if s.name == "b.txt":
+            (final.parent / "a.txt").unlink()
+
+    monkeypatch.setattr(fsops, "_copy_verified", copy)
+    with pytest.raises(VerifyError):
+        fsops.move_tree(proj, tmp_path / "d" / "proj")
+    assert (proj / "a.txt").exists() and (proj / "b.txt").exists()
+
+
+def test_partial_name_within_limit(tmp_path):
+    name = "x" * 250 + ".txt"
+    pn = fsops._partial_name(name)
+    assert len(pn) <= 255 and pn.startswith(fsops.PARTIAL_PREFIX) and pn.endswith(".txt")
+    assert fsops._partial_name("a.txt") == fsops.PARTIAL_PREFIX + "a.txt"
+
+
+def test_cross_volume_long_name(tmp_path, cross_volume):
+    name = "y" * 245 + ".txt"
+    src = w(tmp_path / "s" / name, b"data")
+    r = fsops.move_file(src, tmp_path / "d" / name)
+    assert r.dst.read_bytes() == b"data" and not src.exists()

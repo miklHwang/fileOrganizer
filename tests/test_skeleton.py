@@ -19,6 +19,8 @@ def _modules() -> list[str]:
 
 @pytest.mark.parametrize("name", _modules())
 def test_imports(name):
+    if name == "gui":
+        pytest.importorskip("tkinter")
     importlib.import_module(f"tidyup.{name}")
 
 

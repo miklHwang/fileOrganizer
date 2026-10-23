@@ -25,6 +25,7 @@ Phase 5 (integration + docs): [ ] P5-T1 [ ] P5-T2 [ ] P5-T3
 7. User-facing failures raise a subclass of `errors.TidyupError` with a plain-English message. Print through `tidyup.console`, never bare `print` in library code (except `console.py`).
 8. Tests must pass on ubuntu-latest and windows-latest: use `tmp_path`, close every file/PIL image (`with`), never depend on POSIX permissions, never call real Windows APIs (mock `winutil`). Windows-only behaviour is tested by mocking `winutil.is_windows`, `winutil.get_file_attributes`, `winutil.same_volume`, `winutil.free_space`.
 9. Module stubs created in P1-T1 contain the exact signatures and dataclasses from §2 with bodies `raise NotImplementedError`. The task that fills a module keeps every listed signature/dataclass unchanged; it may add private helpers (`_name`).
+10. Test imports: there is no `tests/__init__.py`; import fixtures as `from fixtures.fake_tree import ...` (not `tests.fixtures`). Fake-tree handles available beyond §3: `version_1..3`, `hidden_dot`, `hidden_attr`, `protected_appdata`, `protected_recycle`, `protected_programfiles`, `excluded_desktop_ini`, `excluded_crdownload`, `git_project`, `node_project`, `app_folder` (dirs), `long_path_file`.
 
 ---
 

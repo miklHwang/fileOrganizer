@@ -149,9 +149,8 @@ def app_install_dir() -> Path | None:
     return Path(sys.executable).resolve().parent if is_frozen() else None
 
 
-def ensure_app_config() -> Path:
-    """Create app_home()/config.yaml from the defaults if missing. Never overwrites."""
-    path = app_home() / "config.yaml"
+def ensure_config_file(path: Path) -> Path:
+    """Create `path` from the defaults if missing (exclusive create). Never overwrites."""
     if not path.exists():
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,6 +161,11 @@ def ensure_app_config() -> Path:
         except OSError as e:
             raise ConfigError(f"Cannot create the settings file {path}: {e.strerror or e}") from e
     return path
+
+
+def ensure_app_config() -> Path:
+    """Create app_home()/config.yaml from the defaults if missing. Never overwrites."""
+    return ensure_config_file(app_home() / "config.yaml")
 
 
 def find_default_config(cwd: Path | None = None) -> Path | None:

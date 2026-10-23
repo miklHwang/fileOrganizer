@@ -18,14 +18,7 @@ _STATUS_IDLE = "Ready."
 def _config_path() -> Path:
     if config.is_frozen():
         return config.find_default_config()  # type: ignore[return-value]
-    path = Path.cwd() / "config.yaml"
-    if not path.exists():
-        try:
-            with open(winutil.long_path(path), "x", encoding="utf-8", newline="") as f:
-                f.write(config.default_config_text())
-        except FileExistsError:
-            pass
-    return path
+    return config.ensure_config_file(Path.cwd() / "config.yaml")
 
 
 class Window:

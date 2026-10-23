@@ -36,9 +36,9 @@ def test_build_tasks_table():
 def test_migrate_task():
     t = app.build_tasks(CFG, migrate_to=Path("/d"))
     m = t["migrate"]
-    assert m.argv[2:] == ["migrate", "--to", "/d", "--yes"]
-    assert m.preview_argv[2:] == ["--dry-run", "migrate", "--to", "/d"]
-    assert "/d" in m.confirm and m.label == "Move to another drive..."
+    assert m.argv[2:] == ["migrate", "--to", str(Path("/d")), "--yes"]
+    assert m.preview_argv[2:] == ["--dry-run", "migrate", "--to", str(Path("/d"))]
+    assert str(Path("/d")) in m.confirm and m.label == "Move to another drive..."
 
 
 def test_run_cli_bad_args_and_sink_restored():
@@ -48,6 +48,7 @@ def test_run_cli_bad_args_and_sink_restored():
     try:
         assert app.run_cli(["--nonsense"], lambda k, t: seen.append((k, t))) == 2
         assert console.get_sink() is prev
+        assert any(k == "error" and t for k, t in seen)
     finally:
         console.set_sink(None)
 

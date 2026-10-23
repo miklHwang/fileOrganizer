@@ -5,6 +5,8 @@ No tkinter here, so everything is testable headless. The window (gui.py) only ca
 """
 from __future__ import annotations
 
+import contextlib
+import io
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -59,8 +61,15 @@ def run_cli(argv: Sequence[str], sink: console.Sink) -> int:
     """Run cli.main with console output sent to `sink`. Never raises."""
     previous = console.get_sink()
     console.set_sink(sink)
+    err = io.StringIO()
     try:
-        return int(cli.main(list(argv)) or 0)
+        try:
+            with contextlib.redirect_stderr(err):
+                return int(cli.main(list(argv)) or 0)
+        finally:
+            text = err.getvalue().strip()
+            if text:
+                sink("error", text)
     except SystemExit as e:
         code = e.code
         if code is None:

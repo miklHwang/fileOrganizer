@@ -197,3 +197,12 @@ def test_frozen_app_dir_excluded_from_scan(fake_tree, mock_attrs, monkeypatch):
         assert not [r for r in res.records if winutil.is_within(r.path, app)]
     res2 = scan.scan_sources(config.load_config(None, overrides=fake_tree.config_overrides()), show_progress=False)
     assert [r for r in res2.records if winutil.is_within(r.path, app)]
+
+
+def test_ensure_config_file_never_overwrites(tmp_path):
+    p = tmp_path / "sub" / "config.yaml"
+    assert config.ensure_config_file(p) == p
+    assert p.read_text(encoding="utf-8") == config.default_config_text()
+    p.write_text("# mine\n", encoding="utf-8")
+    config.ensure_config_file(p)
+    assert p.read_text(encoding="utf-8") == "# mine\n"

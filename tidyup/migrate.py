@@ -60,6 +60,35 @@ def _resolve_folder(cfg: Config, spec: str) -> tuple[Path, str] | None:
     return base, _DISPLAY.get(key, base.name)
 
 
+def _source_folders(cfg: Config) -> list[tuple[Path, str]]:
+    """Existing migrate.folders entries, deduplicated; a folder nested in another listed one is dropped."""
+    found: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for spec in cfg.migrate.get("folders") or []:
+        res = _resolve_folder(cfg, spec)
+        if res is None or not os.path.isdir(_lp(res[0])):
+            continue
+        key = winutil.norm_key(res[0])
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(res)
+    return [(f, d) for f, d in found
+            if not any(o is not f and winutil.is_within(f, o) for o, _ in found)]
+
+
+def _overlaps(a: Path, b: Path) -> bool:
+    return winutil.is_within(a, b) or winutil.is_within(b, a)
+
+
+def _check_to_root(cfg: Config, to_root: Path) -> None:
+    for folder, _d in _source_folders(cfg):
+        if _overlaps(to_root, folder):
+            raise TidyupError(
+                f"The target {to_root} is the same as, inside, or contains the folder {folder} that would "
+                "be migrated. Choose a different drive or an empty folder elsewhere. Nothing was moved.")
+
+
 def _tree_bytes(path: Path) -> int:
     total = 0
     for root, _d, files in os.walk(_lp(path)):
@@ -111,12 +140,15 @@ def build_migration(cfg: Config, to_root: Path) -> MigratePlan:
     to_root = Path(to_root)
     if not os.path.isdir(_lp(to_root)):
         raise TidyupError(f"The target drive or folder {to_root} does not exist.")
+    _check_to_root(cfg, to_root)
     rows: list[ManifestRow] = []
     sizes: list[tuple[Path, int]] = []
     include_od = bool(cfg.migrate.get("include_onedrive", False))
-    seen: set[str] = set()
 
     def make_row(src: Path, dst: Path, size: int, *, cloud: bool) -> None:
+        if _overlaps(src, dst):
+            console.warn(f"Skipping {src}: its destination overlaps the source.")
+            return
         rid = len(rows) + 1
         if cloud:
             rows.append(ManifestRow(rid, Action.SKIP, src, dst, RULE, Confidence.HIGH, CLOUD_NOTE, False))
@@ -125,17 +157,7 @@ def build_migration(cfg: Config, to_root: Path) -> MigratePlan:
                                 f"{size} bytes", True))
         sizes.append((src, size))
 
-    for spec in cfg.migrate.get("folders") or []:
-        res = _resolve_folder(cfg, spec)
-        if res is None:
-            continue
-        folder, display = res
-        if not os.path.isdir(_lp(folder)):
-            continue
-        key = winutil.norm_key(folder)
-        if key in seen:
-            continue
-        seen.add(key)
+    for folder, display in _source_folders(cfg):
         if cfg.in_onedrive(folder) and not include_od:
             console.warn(f"Skipping {folder}: it is inside OneDrive (set migrate.include_onedrive to include it).")
             continue
@@ -159,14 +181,32 @@ def _is_dir(p: Path) -> bool:
     return os.path.isdir(_lp(p)) and not os.path.islink(_lp(p))
 
 
+def _find_resumable(cfg: Config, to_root: Path):
+    key = winutil.norm_key(to_root)
+    for run in reversed(journal.list_runs(cfg.logs_dir)):
+        to = (run.header.get("meta") or {}).get("to")
+        if (run.kind == "migrate" and not run.finished and run.undone_by is None and to
+                and winutil.norm_key(Path(to)) == key):
+            return run
+    return None
+
+
 def run_migration(cfg: Config, rows: Sequence[ManifestRow], to_root: Path, *,
                   dry_run: bool = False) -> ApplyResult:
     from tidyup.apply import ApplyResult
 
+    to_root = Path(to_root)
+    _check_to_root(cfg, to_root)
     todo = [r for r in rows if r.approved and r.action != Action.SKIP]
+    check_space(_remaining_plan(cfg, todo, to_root))
+    sources = [f for f, _d in _source_folders(cfg)]
     jr = None
     if not dry_run:
-        jr = journal.Journal.create(cfg.logs_dir, "migrate", {"config": cfg.path, "to": Path(to_root)})
+        prev = _find_resumable(cfg, to_root)
+        if prev is not None:
+            jr = journal.Journal.resume(prev.path)
+        else:
+            jr = journal.Journal.create(cfg.logs_dir, "migrate", {"config": cfg.path, "to": to_root})
     counts = {"moved": 0, "trashed": 0, "skipped": 0, "errors": 0}
     try:
         for row in console.progress(todo, desc="Migrating", total=len(todo), unit="item"):
@@ -183,6 +223,12 @@ def run_migration(cfg: Config, rows: Sequence[ManifestRow], to_root: Path, *,
                     continue
                 if dst is None or not str(dst).strip():
                     raise TidyupError("Row has no destination")
+                if _overlaps(src, dst):
+                    raise TidyupError("Destination is the same as, or nested with, the source")
+                if not winutil.is_within(dst, to_root) or winutil.norm_key(dst) == winutil.norm_key(to_root):
+                    raise TidyupError(f"Destination is not inside {to_root}")
+                if not any(winutil.is_within(src, f) for f in sources):
+                    raise TidyupError("Source is not inside a configured migrate folder")
                 is_dir = _is_dir(src)
                 safety.check_source(src, cfg, is_dir=is_dir)
                 safety.check_destination(dst, cfg)
@@ -211,6 +257,10 @@ def run_migration(cfg: Config, rows: Sequence[ManifestRow], to_root: Path, *,
     except KeyboardInterrupt:
         if jr:
             jr.finish(counts)
+        raise
+    except BaseException:
+        if jr:
+            jr.close()  # unfinished on purpose: the next run resumes this journal
         raise
     if jr:
         jr.finish(counts)

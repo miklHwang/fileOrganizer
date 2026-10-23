@@ -134,17 +134,75 @@ def test_resume_after_crash(cfg, fake_tree, target, cross_volume, monkeypatch):
     def flaky(*a, **k):
         calls["n"] += 1
         if calls["n"] == 3:
-            raise KeyboardInterrupt
+            raise RuntimeError("simulated crash")
         return real(*a, **k)
 
     monkeypatch.setattr(fsops, "move_file", flaky)
-    with pytest.raises(KeyboardInterrupt):
+    with pytest.raises(RuntimeError):
         migrate.command(cfg, _args(target))
     monkeypatch.setattr(fsops, "move_file", real)
+    runs = journal.list_runs(cfg.logs_dir)
+    assert len(runs) == 1 and not runs[0].finished
+    first_id = runs[0].run_id
     assert migrate.command(cfg, _args(target)) == 0
+    runs = journal.list_runs(cfg.logs_dir)
+    assert len(runs) == 1 and runs[0].run_id == first_id and runs[0].finished
     after = snapshot(target / "Documents")
     assert after == _movable(before)
     assert not any("(2)" in k for k in snapshot(target))
+
+
+def test_refuses_target_containing_sources(cfg, fake_tree):
+    home = fake_tree.folders["home"]
+    before = _home_snapshot(fake_tree)
+    with pytest.raises(TidyupError):
+        migrate.build_migration(cfg, home)
+    with pytest.raises(TidyupError):
+        migrate.command(cfg, _args(home, dry_run=True))
+    with pytest.raises(TidyupError):
+        migrate.run_migration(cfg, [], home)
+    with pytest.raises(TidyupError):
+        migrate.build_migration(cfg, fake_tree.folders["documents"])
+    assert _home_snapshot(fake_tree) == before
+
+
+def test_row_with_dst_equal_src_is_error(cfg, fake_tree, target, cross_volume):
+    plan = migrate.build_migration(cfg, target)
+    row = [r for r in plan.rows if r.source.is_file()][0]
+    bad = dataclasses.replace(row, destination=row.source)
+    before = _home_snapshot(fake_tree)
+    res = migrate.run_migration(cfg, [bad], target)
+    assert res.errors == 1 and res.moved == 0
+    assert _home_snapshot(fake_tree) == before
+
+
+def test_row_outside_scope_is_error(cfg, fake_tree, target, cross_volume, tmp_path):
+    plan = migrate.build_migration(cfg, target)
+    row = [r for r in plan.rows if r.source.is_file()][0]
+    elsewhere = dataclasses.replace(row, destination=tmp_path / "elsewhere" / "x")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("x")
+    stray = dataclasses.replace(row, source=outside, destination=target / "outside.txt")
+    res = migrate.run_migration(cfg, [elsewhere, stray], target)
+    assert res.errors == 2 and res.moved == 0
+    assert row.source.exists() and outside.exists()
+
+
+def test_run_migration_checks_space(cfg, fake_tree, target, cross_volume, monkeypatch):
+    plan = migrate.build_migration(cfg, target)
+    before = _home_snapshot(fake_tree)
+    monkeypatch.setattr(winutil, "free_space", lambda p: 10)
+    with pytest.raises(InsufficientSpaceError):
+        migrate.run_migration(cfg, plan.rows, target)
+    assert _home_snapshot(fake_tree) == before
+    assert journal.list_runs(cfg.logs_dir) == []
+
+
+def test_overlapping_folders_deduped(cfg, fake_tree, target, cross_volume):
+    cfg2 = dataclasses.replace(cfg, migrate={**cfg.migrate, "folders": ["{documents}", "{documents}/Code"]})
+    plan = migrate.build_migration(cfg2, target)
+    srcs = [winutil.norm_key(r.source) for r in plan.rows]
+    assert len(srcs) == len(set(srcs))
 
 
 def test_resume_partial_tree(cfg, fake_tree, target, cross_volume, monkeypatch):

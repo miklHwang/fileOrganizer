@@ -77,8 +77,11 @@ def undo_run(cfg: Config, run: RunLog, *, dry_run: bool = False) -> UndoResult:
     finally:
         if jnl:
             jnl.close()
-    if jnl:
+    if jnl and errors == 0:
         journal.mark_undone(run, jnl.run_id)
+    elif jnl:
+        console.warn(f"Some items could not be undone, so run {run.run_id} is not marked as undone. "
+                     f"Fix the problem and run 'tidyup undo {run.run_id}' again.")
     return UndoResult(undone_run_id=run.run_id, run_id=jnl.run_id if jnl else None,
                       log_path=jnl.path if jnl else None, restored=restored, skipped=skipped,
                       errors=errors, manual=manual, dry_run=dry_run)

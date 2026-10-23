@@ -194,3 +194,21 @@ def test_confirm_changes_helper(monkeypatch):
     monkeypatch.setattr(console, "confirm", lambda p, assume_yes=False: seen.append((p, assume_yes)) or True)
     assert apply.confirm_changes(3, assume_yes=True)
     assert seen == [("Apply 3 changes?", True)]
+
+
+def test_same_path_row_never_reaches_fsops(cfg, h, monkeypatch):
+    a = mk(h / "Downloads/a.txt", b"keep")
+    called = []
+    monkeypatch.setattr(fsops, "move_file", lambda *a_, **k: called.append(1))
+    res = apply.apply_rows(cfg, [row(1, a, a)])
+    assert not called and a.read_bytes() == b"keep"
+    assert res.skipped + res.errors == 1 and res.moved == 0
+    assert "same path" in res.log_path.read_text()
+
+
+def test_apply_rows_skips_unapproved_and_skip_rows(cfg, h):
+    a, b = mk(h / "Downloads/a.txt"), mk(h / "Downloads/b.txt")
+    res = apply.apply_rows(cfg, [row(1, a, h / "o/a.txt", approved=False),
+                                 row(2, b, None, action=Action.SKIP)])
+    assert res.moved == 0 and res.skipped == 2
+    assert a.exists() and b.exists() and not (h / "o").exists()

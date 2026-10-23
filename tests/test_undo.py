@@ -125,3 +125,20 @@ def test_command_latest_list_dry(tmp_path, capsys):
     # explicit re-undo of an already-undone run warns and continues
     undo.command(cfg, ns(run_id=j.run_id))
     assert "already undone" in capsys.readouterr().out
+
+
+def test_partial_failure_not_marked_undone(tmp_path, monkeypatch, capsys):
+    cfg, root = setup(tmp_path)
+    j = do_run(cfg, root)
+    real = fsops.move_file
+
+    def boom(src, dst, **kw):
+        raise OSError("boom")
+    monkeypatch.setattr(fsops, "move_file", boom)
+    res = undo.undo_run(cfg, jr.read_run(j.path))
+    assert res.errors == 1
+    assert jr.read_run(j.path).undone_by is None
+    assert f"tidyup undo {j.run_id}" in capsys.readouterr().out
+    monkeypatch.setattr(fsops, "move_file", real)
+    res2 = undo.undo_run(cfg, jr.read_run(j.path))
+    assert res2.errors == 0 and jr.read_run(j.path).undone_by == res2.run_id

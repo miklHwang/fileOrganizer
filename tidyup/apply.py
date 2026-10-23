@@ -85,6 +85,10 @@ def _do_row(cfg: Config, row: ManifestRow, journal, dry_run: bool) -> str:
         dst = cfg.resolve_destination("_Review_Delete", src) / src.name
     if dst is None or str(dst) in ("", "."):
         raise OSError("manifest row has no destination")
+    if winutil.norm_key(dst) == winutil.norm_key(src):
+        raise UnsafePathError("destination is the same path as the source")
+    if is_dir and winutil.is_within(src, dst):
+        raise UnsafePathError("source folder is inside the destination")
     safety.check_destination(dst, cfg)
     if is_dir:
         if winutil.is_within(dst, src):
@@ -111,6 +115,12 @@ def apply_rows(cfg: Config, rows: Sequence[ManifestRow], *, kind: str = "apply",
 
     try:
         for row in rows:
+            if not row.approved or row.action == Action.SKIP:
+                counts["skipped"] += 1
+                if journal is not None:
+                    journal.skip(src=row.source, row_id=str(row.id),
+                                 reason="row is not approved or is a skip row")
+                continue
             try:
                 counts[_do_row(cfg, row, journal, dry_run)] += 1
             except (UnsafePathError, CloudOnlyError, FileLockedError, FileNotFoundError) as exc:
